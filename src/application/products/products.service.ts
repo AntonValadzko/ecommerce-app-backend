@@ -5,6 +5,10 @@ import {
   PRODUCT_REPOSITORY,
   type IProductRepository,
 } from '../../domain/products/product.repository.port';
+import {
+  PRODUCT_SEARCH_REPOSITORY,
+  type IProductSearchRepository,
+} from '../../domain/products/product-search.repository.port';
 import type {
   AutocompleteSuggestion,
   FilterFacets,
@@ -26,6 +30,8 @@ export class ProductsService {
   constructor(
     @Inject(PRODUCT_REPOSITORY)
     private readonly productRepo: IProductRepository,
+    @Inject(PRODUCT_SEARCH_REPOSITORY)
+    private readonly productSearch: IProductSearchRepository,
     configService: ConfigService,
   ) {
     this.defaultPageSize = configService.get<number>('defaultPageSize') ?? 24;
@@ -37,7 +43,7 @@ export class ProductsService {
 
   async listProducts(query: ProductQuery): Promise<PaginatedResult<ProductListItem>> {
     const limit = this.normalizeLimit(query.limit);
-    return this.productRepo.findMany({ ...query, limit });
+    return this.productSearch.findMany({ ...query, limit });
   }
 
   async getProduct(id: number): Promise<Product> {
@@ -59,11 +65,11 @@ export class ProductsService {
   }
 
   async autocomplete(term: string, limit?: number): Promise<AutocompleteSuggestion[]> {
-    return this.productRepo.autocomplete(term, limit ?? this.autocompleteLimit);
+    return this.productSearch.autocomplete(term, limit ?? this.autocompleteLimit);
   }
 
   async getFacets(query: ProductQuery): Promise<FilterFacets> {
-    return this.productRepo.getFacets(query);
+    return this.productSearch.getFacets(query);
   }
 
   async getRelatedProducts(productId: number): Promise<ProductListItem[]> {

@@ -7,9 +7,9 @@ Node.js + TypeScript backend for an e-commerce product catalog built with NestJS
 | Requirement | Implementation |
 |-------------|----------------|
 | Product listing + pagination | `GET /api/v1/products` with `page`, `limit` (24/48/96) |
-| Infinite scroll | Pass `cursor` from `pagination.nextCursor` |
+| Infinite scroll | Pass `cursor` (`search_after`) from `pagination.nextCursor` |
 | Quick view | `GET /api/v1/products/:id/quick-view` |
-| Search (name, description, SKU, brand) | SQLite FTS5 via `q` parameter |
+| Search (name, description, SKU, brand) | OpenSearch via `q` parameter |
 | Autocomplete | `GET /api/v1/products/autocomplete?q=` |
 | Price range filter | `minPrice`, `maxPrice` |
 | Multi-select brand | `brand=BrandA&brand=BrandB` |
@@ -28,7 +28,9 @@ Node.js + TypeScript backend for an e-commerce product catalog built with NestJS
 - **Language:** TypeScript 5.8 (strict mode)
 - **Framework:** NestJS 10 (`@nestjs/core`, `@nestjs/platform-express`)
 - **Architecture:** Layered / ports & adapters (domain → application → infrastructure → presentation)
-- **Database:** SQLite via `better-sqlite3`, configured through TypeORM
+- **Database:** PostgreSQL 16 (via **PgBouncer** connection pooling on port `6432`)
+- **Search:** OpenSearch 2.x (faceted list, autocomplete, relevance sort)
+- **Cache (ready):** Redis 7 in Docker Compose
 - **ORM:** TypeORM 0.3 — entities, migrations (`migrationsRun: true`, `synchronize: false`)
 - **Validation:** `class-validator` + `class-transformer` DTOs
 - **Docs:** Swagger UI at `/api/docs` via `@nestjs/swagger`
@@ -36,7 +38,7 @@ Node.js + TypeScript backend for an e-commerce product catalog built with NestJS
 
 ## Project Structure
 
-The codebase follows **strict layering**: upper layers depend on abstractions (ports), not on SQLite or HTTP details.
+The codebase follows **strict layering**: upper layers depend on abstractions (ports), not on Postgres, OpenSearch, or HTTP details.
 
 ```
 src/
@@ -44,14 +46,16 @@ src/
   app.module.ts                        Wires DatabaseModule, PersistenceModule, presentation modules
 
   config/
-    configuration.ts                   Port, dbPath, page size limits
+    configuration.ts                   Port, Postgres, OpenSearch, Redis settings
 
   domain/                              Core models + repository ports (no framework imports)
     common/
       entity-not-found.error.ts
     products/
       product.model.ts                 Product, ProductQuery, PaginatedResult, etc.
-      product.repository.port.ts       IProductRepository + PRODUCT_REPOSITORY token
+      product.repository.port.ts       IProductRepository (Postgres reads)
+      product-search.repository.port.ts IProductSearchRepository (OpenSearch)
+      search-cursor.model.ts           search_after cursor shape
     categories/
       category.model.ts
       category.repository.port.ts
@@ -66,12 +70,15 @@ src/
 
   infrastructure/                      Adapters implementing domain ports
     persistence/
-      persistence.module.ts            Binds ports → repository implementations
+      persistence.module.ts            Binds ports → Postgres repositories
       repositories/
-        product.repository.ts          TypeORM (reads, related products)
-        product-search.repository.ts   Raw SQL — FTS5, facets, list, autocomplete
+        product.repository.ts          TypeORM (detail, quick-view, related)
         category.repository.ts
         saved-search.repository.ts
+    search/
+      search.module.ts                 OpenSearch client, index, search adapter
+      opensearch-product-search.repository.ts
+      product-indexer.service.ts       Bulk reindex from Postgres → OpenSearch
 
   presentation/http/                   HTTP boundary (controllers, DTOs, presenters)
     common/
@@ -96,16 +103,16 @@ src/
       dto/
 
   database/                            Persistence schema (TypeORM)
-    database.module.ts                 forRootAsync + seed on init
-    database.constants.ts
-    entities/                          TypeORM entities (source of truth for schema)
-    mappers/                           Entity → domain model mappers
-    migrations/                        InitialSchema, Fts5
-    seed.ts
-    sqlite-base.repository.ts          Base for FTS-only raw SQL access
-    data-source.ts                     Standalone DataSource for TypeORM CLI
+    database.module.ts                 Postgres via PgBouncer
+    bulk-load.service.ts               Demo catalog bulk insert
+    cli/bulk-load.ts                   npm run db:seed
+    cli/search-reindex.ts              npm run search:reindex
+    entities/                          TypeORM entities (schema source of truth)
+    mappers/                           Entity → domain model
+    migrations/                        PostgresInitial
+    data-source.ts                     TypeORM CLI DataSource
 
-data/                                  SQLite DB file (gitignored)
+docker-compose.yml                     Postgres, PgBouncer, OpenSearch, Redis
 dist/                                  Compiled output (gitignored)
 ```
 
@@ -115,9 +122,9 @@ dist/                                  Compiled output (gitignored)
 |-------|----------------|
 | **Domain** | Models, repository interfaces (ports), domain errors |
 | **Application** | Use cases, validation of business rules (e.g. page limits), throws `EntityNotFoundError` |
-| **Infrastructure** | TypeORM repositories, SQLite FTS search, port bindings in `PersistenceModule` |
+| **Infrastructure** | Postgres + OpenSearch adapters, `PersistenceModule` / `SearchModule` |
 | **Presentation** | Routes, DTOs, response shaping, SEO metadata, HTTP middleware |
-| **Database** | Entities, migrations, seed — shared schema definition |
+| **Database** | Entities, migrations, bulk-load CLI |
 
 ### Dependency flow
 
@@ -125,19 +132,157 @@ dist/                                  Compiled output (gitignored)
 Presentation → Application → Domain ← Infrastructure
 ```
 
-Application services never import TypeORM, SQLite, or Express types.
+Application services never import TypeORM or Express types.
+
+## Local development with Docker
+
+The API runs on your machine (Node.js). **Postgres, PgBouncer, OpenSearch, and Redis** run in Docker via `docker-compose.yml`.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose v2)
+- Node.js 20+
+- ~2 GB free RAM (OpenSearch uses 512 MB heap by default)
+
+### Services
+
+| Service | Image | Host port | Used by | Purpose |
+|---------|-------|-----------|---------|---------|
+| **postgres** | `postgres:16-alpine` | `5432` | Admin/debug only | Primary database |
+| **pgbouncer** | `edoburu/pgbouncer` | **`6432`** | **NestJS app** | Connection pooling (`transaction` mode) |
+| **opensearch** | `opensearchproject/opensearch:2.11.1` | `9200` | Search adapter | Product list, facets, autocomplete |
+| **redis** | `redis:7-alpine` | `6379` | Future use | Reserved for caching |
+
+**Credentials (local only):**
+
+| Setting | Value |
+|---------|--------|
+| Postgres user / password / database | `catalog` / `catalog` / `catalog` |
+
+The app **must** connect through **PgBouncer** (`DATABASE_PORT=6432`), not directly to Postgres on `5432`, so pooling matches production-style setup.
+
+### Docker commands
+
+```bash
+# Start all services in the background
+docker compose up -d
+
+# Follow logs
+docker compose logs -f
+
+# Service status + health
+docker compose ps
+
+# Stop containers (keep data volumes)
+docker compose down
+
+# Stop and delete all local data (fresh Postgres + OpenSearch)
+docker compose down -v
+```
+
+### Verify services are ready
+
+```bash
+# PgBouncer → Postgres
+docker compose exec postgres pg_isready -U catalog -d catalog
+
+# OpenSearch cluster health (expect status "green" or "yellow")
+curl http://localhost:9200/_cluster/health?pretty
+
+# Optional: Redis
+docker compose exec redis redis-cli ping
+```
+
+OpenSearch can take **30–60 seconds** on first start. Wait until `docker compose ps` shows `healthy` for `postgres` and `opensearch` before running `npm run db:seed`.
+
+### Environment file
+
+```bash
+cp .env.example .env
+```
+
+Defaults in `.env.example` match `docker-compose.yml`. No changes needed for a standard local setup.
+
+### Data persistence
+
+| Volume | Contents |
+|--------|----------|
+| `pgdata` | Postgres data (survives `docker compose down`) |
+| `osdata` | OpenSearch index data |
+| `redisdata` | Redis snapshots |
+
+Run `docker compose down -v` to wipe everything and start clean.
+
+### Optional: direct Postgres access
+
+For SQL debugging (bypass PgBouncer):
+
+```bash
+docker compose exec postgres psql -U catalog -d catalog
+```
+
+Or from the host: `psql -h localhost -p 5432 -U catalog -d catalog` (password: `catalog`).
+
+### Troubleshooting
+
+| Problem | What to try |
+|---------|-------------|
+| `Cannot connect to Docker daemon` | Start **Docker Desktop** and wait until it is running |
+| `ECONNREFUSED` on port `6432` | `docker compose up -d` and check `docker compose ps` |
+| `ECONNREFUSED` on port `9200` | OpenSearch still starting; check `docker compose logs opensearch` |
+| OpenSearch exits / OOM | Increase Docker Desktop memory (Settings → Resources) to ≥ 4 GB |
+| Port already in use | Stop the conflicting process or change host ports in `docker-compose.yml` |
+| Empty search results | Run `npm run db:seed` or `npm run search:reindex` after Postgres has data |
+| Schema out of date | `npm run build && npm run db:migrate` (migrations also run on app startup) |
+
+### Local architecture
+
+```
+┌─────────────────┐     :6432      ┌────────────┐     ┌──────────┐
+│  NestJS API     │ ──────────────►│ PgBouncer  │────►│ Postgres │
+│  (npm run dev)  │                └────────────┘     └──────────┘
+│  :3000          │
+│                 │     :9200      ┌────────────┐
+│                 │ ──────────────►│ OpenSearch │
+└─────────────────┘                └────────────┘
+```
 
 ## Quick Start
 
+### 1. Start infrastructure
+
+```bash
+docker compose up -d
+cp .env.example .env
+```
+
+Wait until `docker compose ps` shows **healthy** for `postgres` and `opensearch`.
+
+### 2. Install and load data
+
 ```bash
 npm install
+npm run build
+npm run db:seed
+```
+
+`db:seed` runs Postgres migrations (on app start), bulk-loads **100 demo products**, and indexes them into OpenSearch.
+
+### 3. Run API
+
+```bash
 npm run dev
 ```
 
-On first start, migrations run automatically and **100 products across 10 categories** are seeded into a fresh database.
-
 - API base: http://localhost:3000/api/v1
 - Swagger UI: http://localhost:3000/api/docs
+
+### Reindex search only
+
+```bash
+npm run search:reindex
+# or recreate index: npm run search:reindex -- --recreate-index
+```
 
 ## Scripts
 
@@ -148,6 +293,8 @@ On first start, migrations run automatically and **100 products across 10 catego
 | `npm run start` | Run production build (`node dist/main`) |
 | `npm run lint` | Type-check only (`tsc --noEmit`) |
 | `npm run db:migrate` | Run pending migrations (requires `npm run build` first) |
+| `npm run db:seed` | Bulk-load demo catalog to Postgres + index OpenSearch |
+| `npm run search:reindex` | Rebuild OpenSearch index from Postgres |
 
 ## Environment Variables
 
@@ -155,9 +302,16 @@ On first start, migrations run automatically and **100 products across 10 catego
 |----------|---------|-------------|
 | `PORT` | `3000` | HTTP listen port |
 | `NODE_ENV` | `development` | Environment name |
-| `DB_PATH` | `<cwd>/data/catalog.db` | SQLite database file path |
+| `DATABASE_HOST` | `localhost` | Postgres host (use PgBouncer) |
+| `DATABASE_PORT` | `6432` | PgBouncer port |
+| `DATABASE_USER` | `catalog` | Database user |
+| `DATABASE_PASSWORD` | `catalog` | Database password |
+| `DATABASE_NAME` | `catalog` | Database name |
+| `OPENSEARCH_NODE` | `http://localhost:9200` | OpenSearch URL |
+| `OPENSEARCH_INDEX` | `products` | Product search index name |
+| `REDIS_URL` | `redis://localhost:6379` | Redis (reserved for future caching) |
 
-No `.env` file is committed. Config is injected via `ConfigService` (`@nestjs/config`).
+Copy `.env.example` to `.env`. Config is injected via `ConfigService` (`@nestjs/config`).
 
 ## API Reference
 
@@ -188,7 +342,7 @@ No `.env` file is committed. Config is injected via `ConfigService` (`@nestjs/co
 | `sort` | enum | `relevance` \| `price_asc` \| `price_desc` \| `rating` \| `popularity` \| `newest` |
 | `page` | number | Page number (default: 1) |
 | `limit` | 24 \| 48 \| 96 | Items per page (default: 24) |
-| `cursor` | string | Base64url cursor for cursor-based pagination |
+| `cursor` | string | OpenSearch `search_after` cursor (base64url JSON); use for infinite scroll |
 
 ### Categories
 
@@ -224,10 +378,10 @@ GET /api/v1/products?q=wireless&brand=TechPro&minPrice=50&maxPrice=200&minRating
 
 ### Cursor-based infinite scroll
 
-Pass the `nextCursor` value from a previous response as `cursor`:
+Pass the `nextCursor` value from a previous response as `cursor` (OpenSearch `search_after`, base64url-encoded):
 
 ```http
-GET /api/v1/products?limit=24&cursor=eyJvZmZzZXQiOjI0fQ
+GET /api/v1/products?limit=24&cursor=eyJzb3J0IjoicG9wdWxhcml0eSIsInNlYXJjaEFmdGVyIjpbNTAwMCw0Ml19
 ```
 
 ### Attribute filter
@@ -257,36 +411,28 @@ x-session-id: my-session-uuid
 
 ## Key Design Decisions
 
-**Layered architecture:** Domain defines models and `IProductRepository` / `ICategoryRepository` / `ISavedSearchRepository` ports. `PersistenceModule` binds each port to a concrete adapter. Swapping the database means replacing infrastructure (and migrations), not application or presentation code.
+**Layered architecture:** Domain defines models and repository ports (`IProductRepository`, `IProductSearchRepository`, etc.). `PersistenceModule` and `SearchModule` bind ports to Postgres and OpenSearch adapters. Application and presentation layers stay unchanged when swapping infrastructure.
 
-**DB access:** TypeORM entities are the schema source of truth. Standard reads/writes use TypeORM repositories with entity→domain mappers. FTS5 search, faceted counts, and filtered listing use `ProductSearchRepository` (raw SQL via `SqliteBaseRepository`) because FTS virtual tables are SQLite-specific.
+**DB access:** Postgres is the source of truth via TypeORM (`ProductRepository`, etc.). Search/list/facets/autocomplete use `OpenSearchProductSearchRepository` with `search_after` cursors for stable pagination under index updates. Offset `page` is still supported but less ideal at scale.
 
 **Session:** Stateless, header-based. `x-session-id` is read or generated per request by `SessionMiddleware` and echoed back in the response header.
 
-**Pagination:** Supports both offset (`page`/`limit`) and cursor (`cursor` = base64url-encoded `{offset}`). Fetches `limit + 1` rows to determine `hasMore`.
+**Pagination:** Prefer `cursor` (OpenSearch `search_after`, encoded as base64url JSON). Offset `page`/`limit` is supported for shallow pages. Fetches `limit + 1` hits to determine `hasMore`.
 
 **Faceted filtering:** `getFacets` strips brand/price/rating/attribute filters before counting — "open facets" pattern so each dimension shows independent counts.
 
-**FTS5:** Porter stemmer + unicode61 tokenizer. BM25 ranking for relevance sort. Triggers keep `products_fts` in sync with `products`.
+**OpenSearch:** Custom `product_text` analyzer (porter stem). Relevance sort uses `_score`. Reindex with `npm run search:reindex` after bulk loads or bulk updates.
 
 **SEO:** Built in `ProductsPresenter` (presentation layer). Product detail responses include JSON-LD (`schema.org/Product`), canonical URL, and Open Graph type. Listing responses include `schema.org/ItemList`.
 
 **Errors:** Application throws `EntityNotFoundError`; `AllExceptionsFilter` maps it to HTTP 404. `ValidationPipe` with `whitelist: true` is applied globally.
 
-## Swapping the Database
-
-To migrate off SQLite (e.g. PostgreSQL + OpenSearch):
-
-1. Update `DatabaseModule` connection config and add new migrations.
-2. Implement new repository adapters under `infrastructure/persistence/repositories/`.
-3. Reimplement or replace `ProductSearchRepository` (FTS5 is not portable).
-4. Point `PersistenceModule` at the new implementations.
-5. Leave `domain/`, `application/`, and `presentation/` unchanged if ports stay the same.
-
 ## Production Notes
 
-The SQLite + FTS5 setup is suited for development, demos, and single-server deployments. For large-scale production:
+Docker Compose is for **local development**. For marketplace-scale production:
 
-- Replace SQLite with PostgreSQL + Elasticsearch/OpenSearch
-- Add Redis caching for facets and popular queries
-- Use read replicas and a CDN for product images
+- Managed Postgres (Aurora/RDS) + PgBouncer or RDS Proxy
+- OpenSearch cluster (multi-AZ) with index lifecycle management
+- Redis for facet/query cache and rate limiting
+- Async ingest pipeline (Kafka → workers → Postgres → indexer)
+- Horizontal API autoscaling; CDN for images and cacheable GETs

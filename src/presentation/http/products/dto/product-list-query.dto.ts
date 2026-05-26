@@ -93,7 +93,10 @@ export class ProductListQueryDto {
   @IsIn(ALLOWED_LIMITS)
   limit?: number = 24;
 
-  @ApiPropertyOptional({ description: 'Cursor for cursor-based pagination' })
+  @ApiPropertyOptional({
+    description:
+      'OpenSearch search_after cursor (base64url JSON). Preferred for infinite scroll; stable under index updates.',
+  })
   @IsOptional()
   @IsString()
   cursor?: string;

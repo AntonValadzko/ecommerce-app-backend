@@ -1,9 +1,4 @@
-import type { DataSource } from 'typeorm';
-import { CategoryEntity } from './entities/category.entity';
-import { ProductEntity } from './entities/product.entity';
-import { ProductAttributeEntity } from './entities/product-attribute.entity';
-
-const CATEGORIES = [
+export const CATEGORIES = [
   { slug: 'electronics', name: 'Electronics', description: 'Gadgets and devices' },
   { slug: 'clothing', name: 'Clothing', description: 'Apparel for all seasons' },
   { slug: 'home-garden', name: 'Home & Garden', description: 'Home improvement and decor' },
@@ -16,7 +11,7 @@ const CATEGORIES = [
   { slug: 'food', name: 'Grocery & Gourmet', description: 'Food and beverages' },
 ];
 
-const BRANDS_BY_CATEGORY: Record<string, string[]> = {
+export const BRANDS_BY_CATEGORY: Record<string, string[]> = {
   electronics: ['TechPro', 'NovaGear', 'PixelWave', 'CoreLink'],
   clothing: ['UrbanThread', 'ComfortCo', 'StylePeak', 'DenimWorks'],
   'home-garden': ['HomeNest', 'GreenLeaf', 'CraftHaus', 'RoomBright'],
@@ -29,7 +24,7 @@ const BRANDS_BY_CATEGORY: Record<string, string[]> = {
   food: ['FarmFresh', 'GourmetCo', 'SnackBox', 'OrganicTable'],
 };
 
-const ATTRIBUTE_TEMPLATES: Record<string, { name: string; values: string[] }[]> = {
+export const ATTRIBUTE_TEMPLATES: Record<string, { name: string; values: string[] }[]> = {
   electronics: [
     { name: 'color', values: ['Black', 'White', 'Silver', 'Blue'] },
     { name: 'storage', values: ['64GB', '128GB', '256GB', '512GB'] },
@@ -73,7 +68,7 @@ const ATTRIBUTE_TEMPLATES: Record<string, { name: string; values: string[] }[]> 
   ],
 };
 
-const PRODUCT_NAMES: Record<string, string[]> = {
+export const PRODUCT_NAMES: Record<string, string[]> = {
   electronics: ['Wireless Earbuds Pro', 'Smart Watch Series X', '4K Webcam HD', 'Bluetooth Speaker Mini', 'USB-C Hub Deluxe', 'Mechanical Keyboard RGB', 'Portable SSD 1TB', 'Tablet Stand Adjustable', 'Noise Cancelling Headphones', 'Smart Home Plug'],
   clothing: ['Classic Fit Oxford Shirt', 'Slim Denim Jeans', 'Wool Blend Sweater', 'Running Shorts Lite', 'Leather Belt Premium', 'Cotton Hoodie Essential', 'Linen Summer Dress', 'Athletic Performance Tee', 'Waterproof Rain Jacket', 'Cashmere Scarf'],
   'home-garden': ['Ceramic Planter Set', 'LED Desk Lamp Modern', 'Memory Foam Pillow', 'Stainless Steel Cookware', 'Throw Blanket Cozy', 'Wall Clock Minimalist', 'Garden Tool Kit', 'Scented Candle Collection', 'Storage Basket Woven', 'Kitchen Knife Block'],
@@ -97,74 +92,4 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
-export async function runSeed(dataSource: DataSource): Promise<void> {
-  await dataSource.transaction(async (manager) => {
-    await manager.clear(ProductAttributeEntity);
-    await manager.clear(ProductEntity);
-    await manager.clear(CategoryEntity);
-
-    const categoryIds: Record<string, number> = {};
-    for (const cat of CATEGORIES) {
-      const saved = await manager.save(CategoryEntity, {
-        slug: cat.slug,
-        name: cat.name,
-        description: cat.description,
-      });
-      categoryIds[cat.slug] = saved.id;
-    }
-
-    let productIndex = 0;
-    for (const cat of CATEGORIES) {
-      const names = PRODUCT_NAMES[cat.slug] ?? [];
-      const brands = BRANDS_BY_CATEGORY[cat.slug] ?? ['Generic'];
-      const attrs = ATTRIBUTE_TEMPLATES[cat.slug] ?? [];
-
-      for (let i = 0; i < 10; i++) {
-        productIndex++;
-        const baseName = names[i] ?? `${cat.name} Product ${i + 1}`;
-        const brand = brands[i % brands.length]!;
-        const slug = `${slugify(baseName)}-${productIndex}`;
-        const sku = `SKU-${cat.slug.toUpperCase().slice(0, 3)}-${String(productIndex).padStart(4, '0')}`;
-        const price = Math.round((15 + Math.random() * 485) * 100) / 100;
-        const hasDiscount = Math.random() > 0.6;
-        const compareAtPrice = hasDiscount
-          ? Math.round(price * (1.1 + Math.random() * 0.4) * 100) / 100
-          : null;
-        const rating = Math.round((2.5 + Math.random() * 2.5) * 10) / 10;
-        const reviewCount = Math.floor(Math.random() * 2500);
-        const inStock = Math.random() > 0.12;
-        const stockQuantity = inStock ? Math.floor(Math.random() * 500) + 1 : 0;
-        const popularityScore = Math.floor(Math.random() * 10000);
-
-        const product = await manager.save(ProductEntity, {
-          sku,
-          name: baseName,
-          slug,
-          description: `Premium ${baseName} from ${brand}. Ideal for everyday use in the ${cat.name} category. Features high-quality materials and excellent value.`,
-          brand,
-          categoryId: categoryIds[cat.slug],
-          price,
-          compareAtPrice,
-          currency: 'USD',
-          rating,
-          reviewCount,
-          inStock,
-          stockQuantity,
-          popularityScore,
-          imageUrl: `https://picsum.photos/seed/${slug}/400/400`,
-        });
-
-        for (const attrDef of attrs) {
-          await manager.save(ProductAttributeEntity, {
-            productId: product.id,
-            name: attrDef.name,
-            value: pick(attrDef.values),
-          });
-        }
-      }
-    }
-  });
-
-  await dataSource.query(`INSERT INTO products_fts(products_fts) VALUES('rebuild')`);
-  console.log('Seeded 100 products across 10 categories.');
-}
+export const DEMO_PRODUCT_COUNT = CATEGORIES.length * 10;

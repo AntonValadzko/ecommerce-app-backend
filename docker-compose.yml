@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: catalog
+      POSTGRES_PASSWORD: catalog
+      POSTGRES_DB: catalog
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U catalog -d catalog']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22.1-p0
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: catalog
+      DB_PASSWORD: catalog
+      DB_NAME: catalog
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 25
+      AUTH_TYPE: scram-sha-256
+    ports:
+      - '6432:5432'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: 'true'
+      OPENSEARCH_JAVA_OPTS: '-Xms512m -Xmx512m'
+      DISABLE_INSTALL_DEMO_CONFIG: 'true'
+    ports:
+      - '9200:9200'
+    volumes:
+      - osdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9200/_cluster/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  osdata:
+  redisdata:

@@ -7,9 +7,9 @@ export function toSavedSearch(entity: SavedSearchEntity): SavedSearch {
     id: entity.id,
     sessionId: entity.sessionId,
     name: entity.name,
-    query: JSON.parse(entity.queryJson) as ProductQuery,
-    createdAt: entity.createdAt,
-    updatedAt: entity.updatedAt,
+    query: entity.queryJson as ProductQuery,
+    createdAt: entity.createdAt.toISOString(),
+    updatedAt: entity.updatedAt.toISOString(),
   };
 }
 
@@ -18,14 +18,14 @@ export function toSavedSearchEntity(data: {
   sessionId: string;
   name: string;
   query: ProductQuery;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 }): SavedSearchEntity {
   const entity = new SavedSearchEntity();
   entity.id = data.id;
   entity.sessionId = data.sessionId;
   entity.name = data.name;
-  entity.queryJson = JSON.stringify(data.query);
+  entity.queryJson = data.query as Record<string, unknown>;
   entity.createdAt = data.createdAt;
   entity.updatedAt = data.updatedAt;
   return entity;

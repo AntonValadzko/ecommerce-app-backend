@@ -34,8 +34,8 @@ export class CategoryEntity {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ name: 'created_at', type: 'text', default: () => "datetime('now')" })
-  createdAt: string;
+  @Column({ name: 'created_at', type: 'timestamptz', default: () => 'NOW()' })
+  createdAt: Date;
 
   @OneToMany(() => ProductEntity, (product) => product.category)
   products: ProductEntity[];

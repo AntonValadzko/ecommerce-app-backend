@@ -11,12 +11,12 @@ export class SavedSearchEntity {
   @Column({ type: 'text' })
   name: string;
 
-  @Column({ name: 'query_json', type: 'text' })
-  queryJson: string;
+  @Column({ name: 'query_json', type: 'jsonb' })
+  queryJson: Record<string, unknown>;
 
-  @Column({ name: 'created_at', type: 'text', default: () => "datetime('now')" })
-  createdAt: string;
+  @Column({ name: 'created_at', type: 'timestamptz', default: () => 'NOW()' })
+  createdAt: Date;
 
-  @Column({ name: 'updated_at', type: 'text', default: () => "datetime('now')" })
-  updatedAt: string;
+  @Column({ name: 'updated_at', type: 'timestamptz', default: () => 'NOW()' })
+  updatedAt: Date;
 }

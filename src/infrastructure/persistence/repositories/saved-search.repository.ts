@@ -29,7 +29,7 @@ export class SavedSearchRepository implements ISavedSearchRepository {
     query: ProductQuery;
   }): Promise<SavedSearch> {
     const id = uuidv4();
-    const now = new Date().toISOString();
+    const now = new Date();
     const entity = toSavedSearchEntity({
       id,
       sessionId: data.sessionId,

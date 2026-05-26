@@ -53,12 +53,7 @@ export class ProductEntity {
   @Column({ name: 'review_count', type: 'integer', default: 0 })
   reviewCount: number;
 
-  @Column({
-    name: 'in_stock',
-    type: 'integer',
-    default: 1,
-    transformer: { to: (v: boolean) => (v ? 1 : 0), from: (v: number) => Boolean(v) },
-  })
+  @Column({ name: 'in_stock', type: 'boolean', default: true })
   inStock: boolean;
 
   @Column({ name: 'stock_quantity', type: 'integer', default: 0 })
@@ -70,11 +65,11 @@ export class ProductEntity {
   @Column({ name: 'image_url', type: 'text' })
   imageUrl: string;
 
-  @Column({ name: 'created_at', type: 'text', default: () => "datetime('now')" })
-  createdAt: string;
+  @Column({ name: 'created_at', type: 'timestamptz', default: () => 'NOW()' })
+  createdAt: Date;
 
-  @Column({ name: 'updated_at', type: 'text', default: () => "datetime('now')" })
-  updatedAt: string;
+  @Column({ name: 'updated_at', type: 'timestamptz', default: () => 'NOW()' })
+  updatedAt: Date;
 
   @OneToMany(() => ProductAttributeEntity, (attribute) => attribute.product)
   attributes: ProductAttributeEntity[];

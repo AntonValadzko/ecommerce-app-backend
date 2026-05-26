@@ -1,5 +1,10 @@
 import { ProductEntity } from '../entities/product.entity';
 import type { Product, ProductListItem, QuickViewProduct } from '../../domain/products/product.model';
+import { toNumber, toOptionalNumber } from './numeric';
+
+function toIsoString(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
 
 export function toProduct(entity: ProductEntity): Product {
   return {
@@ -12,18 +17,18 @@ export function toProduct(entity: ProductEntity): Product {
     categoryId: entity.categoryId,
     categoryName: entity.category?.name,
     categorySlug: entity.category?.slug,
-    price: entity.price,
-    compareAtPrice: entity.compareAtPrice,
+    price: toNumber(entity.price),
+    compareAtPrice: toOptionalNumber(entity.compareAtPrice),
     currency: entity.currency,
-    rating: entity.rating,
-    reviewCount: entity.reviewCount,
+    rating: toNumber(entity.rating),
+    reviewCount: Number(entity.reviewCount),
     inStock: entity.inStock,
-    stockQuantity: entity.stockQuantity,
-    popularityScore: entity.popularityScore,
+    stockQuantity: Number(entity.stockQuantity),
+    popularityScore: Number(entity.popularityScore),
     imageUrl: entity.imageUrl,
     attributes: (entity.attributes ?? []).map((a) => ({ name: a.name, value: a.value })),
-    createdAt: entity.createdAt,
-    updatedAt: entity.updatedAt,
+    createdAt: toIsoString(entity.createdAt),
+    updatedAt: toIsoString(entity.updatedAt),
   };
 }
 
@@ -37,14 +42,14 @@ export function toProductListItem(entity: ProductEntity): ProductListItem {
     categoryId: entity.categoryId,
     categoryName: entity.category?.name ?? '',
     categorySlug: entity.category?.slug ?? '',
-    price: entity.price,
-    compareAtPrice: entity.compareAtPrice,
+    price: toNumber(entity.price),
+    compareAtPrice: toOptionalNumber(entity.compareAtPrice),
     currency: entity.currency,
-    rating: entity.rating,
-    reviewCount: entity.reviewCount,
+    rating: toNumber(entity.rating),
+    reviewCount: Number(entity.reviewCount),
     inStock: entity.inStock,
     imageUrl: entity.imageUrl,
-    popularityScore: entity.popularityScore,
+    popularityScore: Number(entity.popularityScore),
   };
 }
 
@@ -55,11 +60,11 @@ export function toQuickViewProduct(entity: ProductEntity): QuickViewProduct {
     name: entity.name,
     slug: entity.slug,
     brand: entity.brand,
-    price: entity.price,
-    compareAtPrice: entity.compareAtPrice,
+    price: toNumber(entity.price),
+    compareAtPrice: toOptionalNumber(entity.compareAtPrice),
     currency: entity.currency,
-    rating: entity.rating,
-    reviewCount: entity.reviewCount,
+    rating: toNumber(entity.rating),
+    reviewCount: Number(entity.reviewCount),
     inStock: entity.inStock,
     imageUrl: entity.imageUrl,
     attributes: (entity.attributes ?? []).map((a) => ({ name: a.name, value: a.value })),
