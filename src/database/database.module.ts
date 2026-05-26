@@ -21,6 +21,7 @@ import { runSeed } from './seed';
         synchronize: false,
       }),
     }),
+    TypeOrmModule.forFeature(DATABASE_ENTITIES),
   ],
   exports: [TypeOrmModule],
 })

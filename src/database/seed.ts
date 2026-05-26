@@ -1,5 +1,7 @@
 import type { DataSource } from 'typeorm';
-import type Database from 'better-sqlite3';
+import { CategoryEntity } from './entities/category.entity';
+import { ProductEntity } from './entities/product.entity';
+import { ProductAttributeEntity } from './entities/product-attribute.entity';
 
 const CATEGORIES = [
   { slug: 'electronics', name: 'Electronics', description: 'Gadgets and devices' },
@@ -96,34 +98,19 @@ function pick<T>(arr: T[]): T {
 }
 
 export async function runSeed(dataSource: DataSource): Promise<void> {
-  const db = (dataSource.driver as unknown as { databaseConnection: Database.Database })
-    .databaseConnection;
-
-  const insertCategory = db.prepare(
-    'INSERT INTO categories (slug, name, description) VALUES (@slug, @name, @description)',
-  );
-  const insertProduct = db.prepare(`
-    INSERT INTO products (
-      sku, name, slug, description, brand, category_id, price, compare_at_price,
-      currency, rating, review_count, in_stock, stock_quantity, popularity_score, image_url
-    ) VALUES (
-      @sku, @name, @slug, @description, @brand, @categoryId, @price, @compareAtPrice,
-      'USD', @rating, @reviewCount, @inStock, @stockQuantity, @popularityScore, @imageUrl
-    )
-  `);
-  const insertAttr = db.prepare(
-    'INSERT INTO product_attributes (product_id, name, value) VALUES (@productId, @name, @value)',
-  );
-
-  const seed = db.transaction(() => {
-    db.exec('DELETE FROM product_attributes');
-    db.exec('DELETE FROM products');
-    db.exec('DELETE FROM categories');
+  await dataSource.transaction(async (manager) => {
+    await manager.clear(ProductAttributeEntity);
+    await manager.clear(ProductEntity);
+    await manager.clear(CategoryEntity);
 
     const categoryIds: Record<string, number> = {};
     for (const cat of CATEGORIES) {
-      const result = insertCategory.run(cat);
-      categoryIds[cat.slug] = Number(result.lastInsertRowid);
+      const saved = await manager.save(CategoryEntity, {
+        slug: cat.slug,
+        name: cat.name,
+        description: cat.description,
+      });
+      categoryIds[cat.slug] = saved.id;
     }
 
     let productIndex = 0;
@@ -145,11 +132,11 @@ export async function runSeed(dataSource: DataSource): Promise<void> {
           : null;
         const rating = Math.round((2.5 + Math.random() * 2.5) * 10) / 10;
         const reviewCount = Math.floor(Math.random() * 2500);
-        const inStock = Math.random() > 0.12 ? 1 : 0;
+        const inStock = Math.random() > 0.12;
         const stockQuantity = inStock ? Math.floor(Math.random() * 500) + 1 : 0;
         const popularityScore = Math.floor(Math.random() * 10000);
 
-        const result = insertProduct.run({
+        const product = await manager.save(ProductEntity, {
           sku,
           name: baseName,
           slug,
@@ -158,6 +145,7 @@ export async function runSeed(dataSource: DataSource): Promise<void> {
           categoryId: categoryIds[cat.slug],
           price,
           compareAtPrice,
+          currency: 'USD',
           rating,
           reviewCount,
           inStock,
@@ -166,16 +154,17 @@ export async function runSeed(dataSource: DataSource): Promise<void> {
           imageUrl: `https://picsum.photos/seed/${slug}/400/400`,
         });
 
-        const productId = Number(result.lastInsertRowid);
         for (const attrDef of attrs) {
-          insertAttr.run({ productId, name: attrDef.name, value: pick(attrDef.values) });
+          await manager.save(ProductAttributeEntity, {
+            productId: product.id,
+            name: attrDef.name,
+            value: pick(attrDef.values),
+          });
         }
       }
     }
-
-    db.exec(`INSERT INTO products_fts(products_fts) VALUES('rebuild')`);
   });
 
-  seed();
+  await dataSource.query(`INSERT INTO products_fts(products_fts) VALUES('rebuild')`);
   console.log('Seeded 100 products across 10 categories.');
 }

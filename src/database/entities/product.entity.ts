@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+} from 'typeorm';
+import { CategoryEntity } from './category.entity';
+import { ProductAttributeEntity } from './product-attribute.entity';
 
 @Entity('products')
 export class ProductEntity {
@@ -22,6 +31,12 @@ export class ProductEntity {
 
   @Column({ name: 'category_id', type: 'integer' })
   categoryId: number;
+
+  @ManyToOne(() => CategoryEntity, (category) => category.products, {
+    onDelete: 'RESTRICT',
+  })
+  @JoinColumn({ name: 'category_id' })
+  category: CategoryEntity;
 
   @Column({ type: 'real' })
   price: number;
@@ -60,4 +75,7 @@ export class ProductEntity {
 
   @Column({ name: 'updated_at', type: 'text', default: () => "datetime('now')" })
   updatedAt: string;
+
+  @OneToMany(() => ProductAttributeEntity, (attribute) => attribute.product)
+  attributes: ProductAttributeEntity[];
 }

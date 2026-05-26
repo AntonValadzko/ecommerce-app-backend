@@ -27,62 +27,105 @@ Node.js + TypeScript backend for an e-commerce product catalog built with NestJS
 - **Runtime:** Node.js 20+
 - **Language:** TypeScript 5.8 (strict mode)
 - **Framework:** NestJS 10 (`@nestjs/core`, `@nestjs/platform-express`)
-- **Database:** SQLite via `better-sqlite3`, accessed through TypeORM's DataSource driver
-- **ORM:** TypeORM 0.3 — migrations only (`migrationsRun: true`, `synchronize: false`)
+- **Architecture:** Layered / ports & adapters (domain → application → infrastructure → presentation)
+- **Database:** SQLite via `better-sqlite3`, configured through TypeORM
+- **ORM:** TypeORM 0.3 — entities, migrations (`migrationsRun: true`, `synchronize: false`)
 - **Validation:** `class-validator` + `class-transformer` DTOs
 - **Docs:** Swagger UI at `/api/docs` via `@nestjs/swagger`
 - **Security:** `helmet`, `cors`
 
 ## Project Structure
 
+The codebase follows **strict layering**: upper layers depend on abstractions (ports), not on SQLite or HTTP details.
+
 ```
 src/
-  main.ts                          Bootstrap (NestFactory, Swagger, global pipes/filters)
-  app.module.ts                    Root module (ConfigModule, DatabaseModule, feature modules)
+  main.ts                              Bootstrap (Swagger, global pipes/filters)
+  app.module.ts                        Wires DatabaseModule, PersistenceModule, presentation modules
+
   config/
-    configuration.ts               ConfigModule factory (port, dbPath, page size limits)
-  common/
-    middleware/session.middleware.ts  NestMiddleware — x-session-id header handling
-    filters/all-exceptions.filter.ts  @Catch() — maps exceptions to HTTP responses
-    decorators/session-id.decorator.ts  @SessionId() param decorator
-  database/
-    database.module.ts             @Global TypeOrmModule.forRootAsync + seed on init
-    database.constants.ts          Shared entity and migration arrays
-    sqlite-base.repository.ts      Abstract base repository with better-sqlite3 accessor
-    entities/                      TypeORM entities (category, product, product-attribute, saved-search)
-    migrations/                    Raw SQL migrations (InitialSchema, Fts5)
-    seed.ts                        Seed function (runs automatically when products table is empty)
-    data-source.ts                 Standalone DataSource for TypeORM CLI
-  products/
-    products.module.ts
-    products.controller.ts         7 GET routes
-    products.service.ts            Business logic + SEO builders + limit normalization
-    product.types.ts               Interfaces: Product, ProductListItem, ProductQuery, etc.
-    dto/
-      product-list-query.dto.ts    class-validator DTO with @Transform decorators
-      autocomplete-query.dto.ts
-    repositories/
-      product.repository.ts        Raw SQL via better-sqlite3 (FTS5, facets, cursor pagination)
-  categories/
-    categories.module.ts
-    categories.controller.ts
-    categories.service.ts
-    category.types.ts
-    repositories/
-      category.repository.ts
-  saved-searches/
-    saved-searches.module.ts
-    saved-searches.controller.ts
-    saved-searches.service.ts
-    saved-search.types.ts
-    dto/
-      create-saved-search.dto.ts
-      product-query.dto.ts         Validated ProductQuery shape for nested validation
-    repositories/
-      saved-search.repository.ts
-data/                              SQLite DB file (gitignored)
-dist/                              Compiled output (gitignored)
+    configuration.ts                   Port, dbPath, page size limits
+
+  domain/                              Core models + repository ports (no framework imports)
+    common/
+      entity-not-found.error.ts
+    products/
+      product.model.ts                 Product, ProductQuery, PaginatedResult, etc.
+      product.repository.port.ts       IProductRepository + PRODUCT_REPOSITORY token
+    categories/
+      category.model.ts
+      category.repository.port.ts
+    saved-searches/
+      saved-search.model.ts
+      saved-search.repository.port.ts
+
+  application/                         Use cases (depends on domain ports only)
+    products/products.service.ts
+    categories/categories.service.ts
+    saved-searches/saved-searches.service.ts
+
+  infrastructure/                      Adapters implementing domain ports
+    persistence/
+      persistence.module.ts            Binds ports → repository implementations
+      repositories/
+        product.repository.ts          TypeORM (reads, related products)
+        product-search.repository.ts   Raw SQL — FTS5, facets, list, autocomplete
+        category.repository.ts
+        saved-search.repository.ts
+
+  presentation/http/                   HTTP boundary (controllers, DTOs, presenters)
+    common/
+      middleware/session.middleware.ts
+      filters/all-exceptions.filter.ts
+      decorators/session-id.decorator.ts
+      utils/base-url.ts
+    products/
+      products.module.ts
+      products.controller.ts
+      products.presenter.ts            Response envelopes + SEO / JSON-LD
+      product-response.types.ts
+      dto/
+    categories/
+      categories.module.ts
+      categories.controller.ts
+      categories.presenter.ts
+    saved-searches/
+      saved-searches.module.ts
+      saved-searches.controller.ts
+      saved-searches.presenter.ts
+      dto/
+
+  database/                            Persistence schema (TypeORM)
+    database.module.ts                 forRootAsync + seed on init
+    database.constants.ts
+    entities/                          TypeORM entities (source of truth for schema)
+    mappers/                           Entity → domain model mappers
+    migrations/                        InitialSchema, Fts5
+    seed.ts
+    sqlite-base.repository.ts          Base for FTS-only raw SQL access
+    data-source.ts                     Standalone DataSource for TypeORM CLI
+
+data/                                  SQLite DB file (gitignored)
+dist/                                  Compiled output (gitignored)
 ```
+
+### Layer responsibilities
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Domain** | Models, repository interfaces (ports), domain errors |
+| **Application** | Use cases, validation of business rules (e.g. page limits), throws `EntityNotFoundError` |
+| **Infrastructure** | TypeORM repositories, SQLite FTS search, port bindings in `PersistenceModule` |
+| **Presentation** | Routes, DTOs, response shaping, SEO metadata, HTTP middleware |
+| **Database** | Entities, migrations, seed — shared schema definition |
+
+### Dependency flow
+
+```
+Presentation → Application → Domain ← Infrastructure
+```
+
+Application services never import TypeORM, SQLite, or Express types.
 
 ## Quick Start
 
@@ -214,17 +257,31 @@ x-session-id: my-session-uuid
 
 ## Key Design Decisions
 
-**DB access:** TypeORM's `DataSource` is used only for migrations and DI. All queries go through `better-sqlite3` prepared statements accessed via a shared `SqliteBaseRepository` base class, preserving named SQL params (`@param` syntax) and synchronous execution.
+**Layered architecture:** Domain defines models and `IProductRepository` / `ICategoryRepository` / `ISavedSearchRepository` ports. `PersistenceModule` binds each port to a concrete adapter. Swapping the database means replacing infrastructure (and migrations), not application or presentation code.
+
+**DB access:** TypeORM entities are the schema source of truth. Standard reads/writes use TypeORM repositories with entity→domain mappers. FTS5 search, faceted counts, and filtered listing use `ProductSearchRepository` (raw SQL via `SqliteBaseRepository`) because FTS virtual tables are SQLite-specific.
 
 **Session:** Stateless, header-based. `x-session-id` is read or generated per request by `SessionMiddleware` and echoed back in the response header.
 
-**Pagination:** Supports both offset (`page`/`limit`) and cursor (`cursor` = base64url-encoded `{offset}`) simultaneously. Fetches `limit + 1` rows to determine `hasMore`.
+**Pagination:** Supports both offset (`page`/`limit`) and cursor (`cursor` = base64url-encoded `{offset}`). Fetches `limit + 1` rows to determine `hasMore`.
 
 **Faceted filtering:** `getFacets` strips brand/price/rating/attribute filters before counting — "open facets" pattern so each dimension shows independent counts.
 
 **FTS5:** Porter stemmer + unicode61 tokenizer. BM25 ranking for relevance sort. Triggers keep `products_fts` in sync with `products`.
 
-**SEO:** Product detail responses include JSON-LD (`schema.org/Product`), canonical URL, and Open Graph type. Listing responses include `schema.org/ItemList`.
+**SEO:** Built in `ProductsPresenter` (presentation layer). Product detail responses include JSON-LD (`schema.org/Product`), canonical URL, and Open Graph type. Listing responses include `schema.org/ItemList`.
+
+**Errors:** Application throws `EntityNotFoundError`; `AllExceptionsFilter` maps it to HTTP 404. `ValidationPipe` with `whitelist: true` is applied globally.
+
+## Swapping the Database
+
+To migrate off SQLite (e.g. PostgreSQL + OpenSearch):
+
+1. Update `DatabaseModule` connection config and add new migrations.
+2. Implement new repository adapters under `infrastructure/persistence/repositories/`.
+3. Reimplement or replace `ProductSearchRepository` (FTS5 is not portable).
+4. Point `PersistenceModule` at the new implementations.
+5. Leave `domain/`, `application/`, and `presentation/` unchanged if ports stay the same.
 
 ## Production Notes
 
