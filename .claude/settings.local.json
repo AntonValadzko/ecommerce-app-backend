@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(timeout 10 node dist/main.js)",
+      "Bash(node dist/main.js)",
+      "Bash(curl -s http://localhost:3000/api/v1/categories)",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const a=JSON.parse\\(d\\);console.log\\('categories count:',a.length\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/v1/products?limit=24\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const r=JSON.parse\\(d\\);console.log\\('products total:',r.total,'items:',r.items.length\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/v1/products/autocomplete?q=phone\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const a=JSON.parse\\(d\\);console.log\\('autocomplete suggestions:',a.length\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/v1/products/facets?category=electronics\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const f=JSON.parse\\(d\\);console.log\\('brands:',f.brands.length,'price range:',f.priceRange\\)\" kill %1)",
+      "Bash(node -e \"const a=require\\('/tmp/cat.json'\\);console.log\\('categories:',a.length\\)\")",
+      "Bash(node -e \"const r=require\\('/tmp/prod.json'\\);console.log\\('products total:',r.total,'items:',r.items.length,'hasMore:',r.hasMore\\)\")",
+      "Bash(node -e \"const a=require\\('/tmp/auto.json'\\);console.log\\('autocomplete:',a.length,'suggestions'\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/v1/products/1\")",
+      "Bash(node -e \"const r=require\\('/tmp/p1.json'\\);console.log\\('product id:',r.product.id,'name:',r.product.name\\)\")",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(xargs -r taskkill /PID /F)",
+      "Bash(curl -s http://localhost:3000/api/v1/categories -o categories_test.json)",
+      "Bash(node -e \"const a=JSON.parse\\(require\\('fs'\\).readFileSync\\('categories_test.json'\\)\\);console.log\\('OK categories:',a.length\\)\")",
+      "Bash(rm categories_test.json)",
+      "Bash(kill %1)",
+      "Bash(./node_modules/.bin/nest build *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(git show *)"
+    ]
+  }
+}
