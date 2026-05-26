@@ -1,12 +1,5 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  ParseIntPipe,
-  Req,
-  ValidationPipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, ParseIntPipe, Req } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiTags,
   ApiOperation,
@@ -22,17 +15,28 @@ import { AutocompleteQueryDto } from './dto/autocomplete-query.dto';
 @ApiTags('Products')
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  private readonly pageSizeOptions: number[];
+
+  constructor(
+    private readonly productsService: ProductsService,
+    configService: ConfigService,
+  ) {
+    this.pageSizeOptions = configService.get<number[]>('allowedPageSizes')!;
+  }
+
+  private getBaseUrl(req: Request): string {
+    return `${req.protocol}://${req.get('host')}`;
+  }
 
   @Get()
   @ApiOperation({ summary: 'List products with filtering, sorting and pagination' })
   @ApiResponse({ status: 200, description: 'Paginated product list with SEO meta' })
   async findAll(
-    @Query(new ValidationPipe({ transform: true, whitelist: true })) dto: ProductListQueryDto,
+    @Query() dto: ProductListQueryDto,
     @Req() req: Request,
   ) {
     const query = dto.toProductQuery();
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = this.getBaseUrl(req);
     const result = await this.productsService.listProducts(query);
     const seo = this.productsService.buildListingSeo(query, result.total, baseUrl);
     return {
@@ -47,8 +51,8 @@ export class ProductsController {
       },
       meta: {
         sort: dto.sort,
-        pageSizeOptions: [24, 48, 96],
-        infiniteScroll: Boolean(dto.cursor || false),
+        pageSizeOptions: this.pageSizeOptions,
+        infiniteScroll: Boolean(dto.cursor),
         seo,
       },
     };
@@ -57,9 +61,7 @@ export class ProductsController {
   @Get('facets')
   @ApiOperation({ summary: 'Get filter facets for current query' })
   @ApiResponse({ status: 200, description: 'Facets: brands, price range, ratings, attributes' })
-  async getFacets(
-    @Query(new ValidationPipe({ transform: true, whitelist: true })) dto: ProductListQueryDto,
-  ) {
+  async getFacets(@Query() dto: ProductListQueryDto) {
     return { data: await this.productsService.getFacets(dto.toProductQuery()) };
   }
 
@@ -68,10 +70,8 @@ export class ProductsController {
   @ApiQuery({ name: 'q', description: 'Search term', required: true })
   @ApiQuery({ name: 'limit', description: 'Max suggestions', required: false })
   @ApiResponse({ status: 200, description: 'List of autocomplete suggestions' })
-  async autocomplete(
-    @Query(new ValidationPipe({ transform: true, whitelist: true })) dto: AutocompleteQueryDto,
-  ) {
-    return { data: await this.productsService.autocomplete(dto.q) };
+  async autocomplete(@Query() dto: AutocompleteQueryDto) {
+    return { data: await this.productsService.autocomplete(dto.q, dto.limit) };
   }
 
   @Get('slug/:slug')
@@ -80,7 +80,7 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: 'Product detail with SEO meta' })
   @ApiResponse({ status: 404, description: 'Product not found' })
   async findBySlug(@Param('slug') slug: string, @Req() req: Request) {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = this.getBaseUrl(req);
     const product = await this.productsService.getProductBySlug(slug);
     const seo = this.productsService.buildProductSeo(product, baseUrl);
     return { data: product, meta: { seo } };
@@ -109,7 +109,7 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: 'Product detail with SEO meta' })
   @ApiResponse({ status: 404, description: 'Product not found' })
   async findOne(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = this.getBaseUrl(req);
     const product = await this.productsService.getProduct(id);
     const seo = this.productsService.buildProductSeo(product, baseUrl);
     return { data: product, meta: { seo } };

@@ -14,10 +14,22 @@ import type {
 
 @Injectable()
 export class ProductsService {
+  private readonly defaultPageSize: number;
+  private readonly allowedPageSizes: number[];
+  private readonly maxPageSize: number;
+  private readonly autocompleteLimit: number;
+  private readonly relatedProductsLimit: number;
+
   constructor(
     private readonly productRepo: ProductRepository,
-    private readonly configService: ConfigService,
-  ) {}
+    configService: ConfigService,
+  ) {
+    this.defaultPageSize = configService.get<number>('defaultPageSize') ?? 24;
+    this.allowedPageSizes = configService.get<number[]>('allowedPageSizes') ?? [24, 48, 96];
+    this.maxPageSize = configService.get<number>('maxPageSize') ?? 96;
+    this.autocompleteLimit = configService.get<number>('autocompleteLimit') ?? 10;
+    this.relatedProductsLimit = configService.get<number>('relatedProductsLimit') ?? 6;
+  }
 
   async listProducts(query: ProductQuery): Promise<PaginatedResult<ProductListItem>> {
     const limit = this.normalizeLimit(query.limit);
@@ -37,29 +49,13 @@ export class ProductsService {
   }
 
   async getQuickView(id: number): Promise<QuickViewProduct> {
-    const product = await this.productRepo.findById(id);
+    const product = await this.productRepo.findQuickView(id);
     if (!product) throw new NotFoundException(`Product "${id}" not found`);
-
-    return {
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      slug: product.slug,
-      brand: product.brand,
-      price: product.price,
-      compareAtPrice: product.compareAtPrice,
-      currency: product.currency,
-      rating: product.rating,
-      reviewCount: product.reviewCount,
-      inStock: product.inStock,
-      imageUrl: product.imageUrl,
-      attributes: product.attributes,
-    };
+    return product;
   }
 
-  async autocomplete(term: string): Promise<AutocompleteSuggestion[]> {
-    const limit = this.configService.get<number>('autocompleteLimit') ?? 10;
-    return this.productRepo.autocomplete(term, limit);
+  async autocomplete(term: string, limit?: number): Promise<AutocompleteSuggestion[]> {
+    return this.productRepo.autocomplete(term, limit ?? this.autocompleteLimit);
   }
 
   async getFacets(query: ProductQuery): Promise<FilterFacets> {
@@ -67,8 +63,7 @@ export class ProductsService {
   }
 
   async getRelatedProducts(productId: number): Promise<ProductListItem[]> {
-    const limit = this.configService.get<number>('relatedProductsLimit') ?? 6;
-    return this.productRepo.findRelated(productId, limit);
+    return this.productRepo.findRelated(productId, this.relatedProductsLimit);
   }
 
   buildProductSeo(product: Product, baseUrl: string): ProductSeoMeta {
@@ -128,12 +123,8 @@ export class ProductsService {
   }
 
   private normalizeLimit(limit?: number): number {
-    const defaultPageSize = this.configService.get<number>('defaultPageSize') ?? 24;
-    const allowedPageSizes = this.configService.get<number[]>('allowedPageSizes') ?? [24, 48, 96];
-    const maxPageSize = this.configService.get<number>('maxPageSize') ?? 96;
-
-    if (!limit) return defaultPageSize;
-    if (allowedPageSizes.includes(limit)) return limit;
-    return Math.min(limit, maxPageSize);
+    if (!limit) return this.defaultPageSize;
+    if (this.allowedPageSizes.includes(limit)) return limit;
+    return Math.min(limit, this.maxPageSize);
   }
 }

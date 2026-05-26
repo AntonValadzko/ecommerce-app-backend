@@ -19,7 +19,6 @@ import {
 import { SavedSearchesService } from './saved-searches.service';
 import { CreateSavedSearchDto } from './dto/create-saved-search.dto';
 import { SessionId } from '../common/decorators/session-id.decorator';
-import type { ProductQuery } from '../products/product.types';
 
 @ApiTags('Saved Searches')
 @ApiHeader({ name: 'x-session-id', description: 'Session identifier', required: false })
@@ -40,7 +39,7 @@ export class SavedSearchesController {
   @ApiBody({ type: CreateSavedSearchDto })
   @ApiResponse({ status: 201, description: 'Saved search created' })
   async create(@SessionId() sessionId: string, @Body() dto: CreateSavedSearchDto) {
-    return { data: await this.savedSearchesService.save(sessionId, dto.name, dto.query as ProductQuery) };
+    return { data: await this.savedSearchesService.save(sessionId, dto.name, dto.query) };
   }
 
   @Delete(':id')

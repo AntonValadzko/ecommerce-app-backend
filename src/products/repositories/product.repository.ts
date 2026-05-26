@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import type Database from 'better-sqlite3';
+import { SqliteBaseRepository } from '../../database/sqlite-base.repository';
 import type {
   Product,
   ProductListItem,
@@ -9,6 +9,7 @@ import type {
   PaginatedResult,
   AutocompleteSuggestion,
   FilterFacets,
+  QuickViewProduct,
   SortOption,
 } from '../product.types';
 
@@ -40,12 +41,9 @@ interface ProductRow {
 }
 
 @Injectable()
-export class ProductRepository {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
-
-  private get db(): Database.Database {
-    return (this.dataSource.driver as unknown as { databaseConnection: Database.Database })
-      .databaseConnection;
+export class ProductRepository extends SqliteBaseRepository {
+  constructor(@InjectDataSource() dataSource: DataSource) {
+    super(dataSource);
   }
 
   async findById(id: number): Promise<Product | null> {
@@ -74,6 +72,41 @@ export class ProductRepository {
 
     if (!row) return null;
     return this.mapToProduct(row);
+  }
+
+  async findQuickView(id: number): Promise<QuickViewProduct | null> {
+    const row = this.db
+      .prepare(
+        `SELECT p.id, p.sku, p.name, p.slug, p.brand,
+                p.price, p.compare_at_price as compareAtPrice, p.currency,
+                p.rating, p.review_count as reviewCount, p.in_stock as inStock,
+                p.image_url as imageUrl
+         FROM products p
+         WHERE p.id = ?`,
+      )
+      .get(id) as Record<string, unknown> | undefined;
+
+    if (!row) return null;
+
+    const attrs = this.db
+      .prepare('SELECT name, value FROM product_attributes WHERE product_id = ?')
+      .all(id) as { name: string; value: string }[];
+
+    return {
+      id: row.id as number,
+      sku: row.sku as string,
+      name: row.name as string,
+      slug: row.slug as string,
+      brand: row.brand as string,
+      price: row.price as number,
+      compareAtPrice: (row.compareAtPrice as number | null) ?? null,
+      currency: row.currency as string,
+      rating: row.rating as number,
+      reviewCount: row.reviewCount as number,
+      inStock: Boolean(row.inStock),
+      imageUrl: row.imageUrl as string,
+      attributes: attrs,
+    };
   }
 
   async findMany(query: ProductQuery): Promise<PaginatedResult<ProductListItem>> {
@@ -159,17 +192,24 @@ export class ProductRepository {
       .prepare(`SELECT MIN(p.price) as min, MAX(p.price) as max ${baseJoins} WHERE ${where}`)
       .get(params) as { min: number | null; max: number | null };
 
-    const ratingThresholds = [4, 3, 2, 1];
-    const ratings = ratingThresholds.map((threshold) => {
-      const result = this.db
-        .prepare(
-          `SELECT COUNT(DISTINCT p.id) as count
-           ${baseJoins}
-           WHERE ${where} AND p.rating >= @threshold`,
-        )
-        .get({ ...params, threshold }) as { count: number };
-      return { threshold, count: result.count };
-    });
+    const ratingCounts = this.db
+      .prepare(
+        `SELECT
+           SUM(CASE WHEN p.rating >= 4 THEN 1 ELSE 0 END) as r4,
+           SUM(CASE WHEN p.rating >= 3 THEN 1 ELSE 0 END) as r3,
+           SUM(CASE WHEN p.rating >= 2 THEN 1 ELSE 0 END) as r2,
+           SUM(CASE WHEN p.rating >= 1 THEN 1 ELSE 0 END) as r1
+         ${baseJoins}
+         WHERE ${where}`,
+      )
+      .get(params) as { r4: number; r3: number; r2: number; r1: number };
+
+    const ratings = [
+      { threshold: 4, count: ratingCounts.r4 },
+      { threshold: 3, count: ratingCounts.r3 },
+      { threshold: 2, count: ratingCounts.r2 },
+      { threshold: 1, count: ratingCounts.r1 },
+    ];
 
     const categories = this.db
       .prepare(
@@ -256,8 +296,11 @@ export class ProductRepository {
   }
 
   async findRelated(productId: number, limit: number): Promise<ProductListItem[]> {
-    const product = await this.findById(productId);
-    if (!product) return [];
+    const categoryRow = this.db
+      .prepare('SELECT category_id FROM products WHERE id = ?')
+      .get(productId) as { category_id: number } | undefined;
+
+    if (!categoryRow) return [];
 
     const rows = this.db
       .prepare(
@@ -273,7 +316,7 @@ export class ProductRepository {
          ORDER BY p.popularity_score DESC
          LIMIT @limit`,
       )
-      .all({ categoryId: product.categoryId, productId, limit }) as ProductRow[];
+      .all({ categoryId: categoryRow.category_id, productId, limit }) as ProductRow[];
 
     return rows.map((r) => this.mapToListItem(r));
   }
@@ -435,7 +478,12 @@ export class ProductRepository {
   }
 
   private decodeCursor(cursor: string): number {
-    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString()) as { offset: number };
-    return parsed.offset;
+    try {
+      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString()) as { offset: number };
+      if (typeof parsed.offset !== 'number') throw new Error('missing offset');
+      return parsed.offset;
+    } catch {
+      throw new BadRequestException('Invalid cursor value');
+    }
   }
 }

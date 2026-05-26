@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
-import type Database from 'better-sqlite3';
+import { SqliteBaseRepository } from '../../database/sqlite-base.repository';
 import type { SavedSearch } from '../saved-search.types';
 import type { ProductQuery } from '../../products/product.types';
 
@@ -16,12 +16,9 @@ interface SavedSearchRow {
 }
 
 @Injectable()
-export class SavedSearchRepository {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
-
-  private get db(): Database.Database {
-    return (this.dataSource.driver as unknown as { databaseConnection: Database.Database })
-      .databaseConnection;
+export class SavedSearchRepository extends SqliteBaseRepository {
+  constructor(@InjectDataSource() dataSource: DataSource) {
+    super(dataSource);
   }
 
   async findBySession(sessionId: string): Promise<SavedSearch[]> {
@@ -29,13 +26,6 @@ export class SavedSearchRepository {
       .prepare('SELECT * FROM saved_searches WHERE session_id = ? ORDER BY updated_at DESC')
       .all(sessionId) as SavedSearchRow[];
     return rows.map((r) => this.mapRow(r));
-  }
-
-  async findById(id: string): Promise<SavedSearch | null> {
-    const row = this.db
-      .prepare('SELECT * FROM saved_searches WHERE id = ?')
-      .get(id) as SavedSearchRow | undefined;
-    return row ? this.mapRow(row) : null;
   }
 
   async create(data: {

@@ -38,8 +38,13 @@ export class ProductEntity {
   @Column({ name: 'review_count', type: 'integer', default: 0 })
   reviewCount: number;
 
-  @Column({ name: 'in_stock', type: 'integer', default: 1 })
-  inStock: number;
+  @Column({
+    name: 'in_stock',
+    type: 'integer',
+    default: 1,
+    transformer: { to: (v: boolean) => (v ? 1 : 0), from: (v: number) => Boolean(v) },
+  })
+  inStock: boolean;
 
   @Column({ name: 'stock_quantity', type: 'integer', default: 0 })
   stockQuantity: number;

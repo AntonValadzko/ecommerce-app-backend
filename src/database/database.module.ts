@@ -3,12 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { CategoryEntity } from './entities/category.entity';
-import { ProductEntity } from './entities/product.entity';
-import { ProductAttributeEntity } from './entities/product-attribute.entity';
-import { SavedSearchEntity } from './entities/saved-search.entity';
-import { InitialSchema1700000000000 } from './migrations/1700000000000-InitialSchema';
-import { Fts51700000000001 } from './migrations/1700000000001-Fts5';
+import { DATABASE_ENTITIES, DATABASE_MIGRATIONS } from './database.constants';
 import { runSeed } from './seed';
 
 @Global()
@@ -20,8 +15,8 @@ import { runSeed } from './seed';
       useFactory: (config: ConfigService) => ({
         type: 'better-sqlite3' as const,
         database: config.get<string>('dbPath')!,
-        entities: [CategoryEntity, ProductEntity, ProductAttributeEntity, SavedSearchEntity],
-        migrations: [InitialSchema1700000000000, Fts51700000000001],
+        entities: DATABASE_ENTITIES,
+        migrations: DATABASE_MIGRATIONS,
         migrationsRun: true,
         synchronize: false,
       }),

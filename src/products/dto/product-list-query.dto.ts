@@ -122,8 +122,8 @@ export class ProductListQueryDto {
       inStock: this.inStock,
       attributes: this.attributes,
       sort: this.sort,
-      page: this.page ?? 1,
-      limit: this.limit ?? 24,
+      page: this.page,
+      limit: this.limit,
       cursor: this.cursor,
     };
   }

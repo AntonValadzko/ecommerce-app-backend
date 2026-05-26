@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
@@ -8,6 +8,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
   app.use(helmet());
@@ -31,8 +32,8 @@ async function bootstrap() {
   const port = configService.get<number>('port') ?? 3000;
   await app.listen(port);
 
-  console.log(`Server running on http://localhost:${port}/api/v1`);
-  console.log(`Swagger UI at http://localhost:${port}/api/docs`);
+  logger.log(`Server running on http://localhost:${port}/api/v1`);
+  logger.log(`Swagger UI at http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
