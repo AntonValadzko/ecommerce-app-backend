@@ -95,6 +95,8 @@ Base path: `/api/v1`
 | GET | `/products/:id` | Detail by id (Postgres) |
 | GET | `/products/:id/quick-view` | Quick view (Postgres) |
 | GET | `/products/:id/related` | Related (Postgres) |
+| POST | `/products` | Create (Postgres + OpenSearch index) |
+| PATCH | `/products/:id` | Partial update + re-index |
 
 **List query params:** `q`, `category`, `categoryId`, `brand[]`, `minPrice`, `maxPrice`, `minRating`, `inStock`, `sort`, `page`, `limit`, `cursor` (OpenSearch `search_after`), `attributes` (JSON).
 

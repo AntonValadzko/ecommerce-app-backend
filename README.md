@@ -21,6 +21,8 @@ Node.js + TypeScript backend for an e-commerce product catalog built with NestJS
 | SEO metadata | Included in product/list responses under `meta.seo` |
 | Saved searches | `POST/GET/DELETE /api/v1/saved-searches` (session-based) |
 | Related products | `GET /api/v1/products/:id/related` |
+| Create product | `POST /api/v1/products` (Postgres + OpenSearch index) |
+| Update product | `PATCH /api/v1/products/:id` (partial; re-indexes OpenSearch) |
 
 ## Tech Stack
 
@@ -266,7 +268,7 @@ npm run build
 npm run db:seed
 ```
 
-`db:seed` runs Postgres migrations (on app start), bulk-loads **100 demo products**, and indexes them into OpenSearch.
+`db:seed` bulk-loads **~150–380 demo products** (random count per category, 15–38 each) with category-matched Unsplash images, then indexes OpenSearch.
 
 ### 3. Run API
 
@@ -326,6 +328,8 @@ Copy `.env.example` to `.env`. Config is injected via `ConfigService` (`@nestjs/
 | GET | `/api/v1/products/:id` | Product by numeric ID |
 | GET | `/api/v1/products/:id/quick-view` | Compact data for modal/overlay |
 | GET | `/api/v1/products/:id/related` | Related products in same category |
+| POST | `/api/v1/products` | Create product (validates category; unique SKU/slug) |
+| PATCH | `/api/v1/products/:id` | Partial update; syncs OpenSearch index |
 
 **Query parameters for `/products` and `/products/facets`:**
 

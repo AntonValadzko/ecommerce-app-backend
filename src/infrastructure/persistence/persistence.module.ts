@@ -1,4 +1,6 @@
 import { Global, Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ProductAttributeEntity } from '../../database/entities/product-attribute.entity';
 import { PRODUCT_REPOSITORY } from '../../domain/products/product.repository.port';
 import { CATEGORY_REPOSITORY } from '../../domain/categories/category.repository.port';
 import { SAVED_SEARCH_REPOSITORY } from '../../domain/saved-searches/saved-search.repository.port';
@@ -9,7 +11,7 @@ import { SavedSearchRepository } from './repositories/saved-search.repository';
 
 @Global()
 @Module({
-  imports: [SearchModule],
+  imports: [SearchModule, TypeOrmModule.forFeature([ProductAttributeEntity])],
   providers: [
     ProductRepository,
     CategoryRepository,

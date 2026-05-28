@@ -1,16 +1,31 @@
-import { Controller, Get, Param, Query, ParseIntPipe, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Query,
+  Body,
+  ParseIntPipe,
+  Req,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
+  ApiBody,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ProductsService } from '../../../application/products/products.service';
 import { ProductsPresenter } from './products.presenter';
 import { ProductListQueryDto } from './dto/product-list-query.dto';
 import { AutocompleteQueryDto } from './dto/autocomplete-query.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 import { getBaseUrl } from '../common/utils/base-url';
 
 @ApiTags('Products')
@@ -44,6 +59,18 @@ export class ProductsController {
     return this.presenter.toDataResponse(facets);
   }
 
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a product' })
+  @ApiBody({ type: CreateProductDto })
+  @ApiResponse({ status: 201, description: 'Product created and indexed in OpenSearch' })
+  @ApiResponse({ status: 404, description: 'Category not found' })
+  @ApiResponse({ status: 409, description: 'SKU or slug already exists' })
+  async create(@Body() dto: CreateProductDto, @Req() req: Request) {
+    const product = await this.productsService.createProduct(dto.toCommand());
+    return this.presenter.toDetailResponse(product, getBaseUrl(req));
+  }
+
   @Get('autocomplete')
   @ApiOperation({ summary: 'Autocomplete search suggestions' })
   @ApiQuery({ name: 'q', description: 'Search term', required: true })
@@ -61,6 +88,22 @@ export class ProductsController {
   @ApiResponse({ status: 404, description: 'Product not found' })
   async findBySlug(@Param('slug') slug: string, @Req() req: Request) {
     const product = await this.productsService.getProductBySlug(slug);
+    return this.presenter.toDetailResponse(product, getBaseUrl(req));
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a product (partial)' })
+  @ApiParam({ name: 'id', description: 'Product ID' })
+  @ApiBody({ type: UpdateProductDto })
+  @ApiResponse({ status: 200, description: 'Product updated and re-indexed in OpenSearch' })
+  @ApiResponse({ status: 404, description: 'Product or category not found' })
+  @ApiResponse({ status: 409, description: 'SKU or slug already exists' })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateProductDto,
+    @Req() req: Request,
+  ) {
+    const product = await this.productsService.updateProduct(id, dto.toUpdateProductInput());
     return this.presenter.toDetailResponse(product, getBaseUrl(req));
   }
 

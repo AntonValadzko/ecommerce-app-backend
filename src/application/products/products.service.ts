@@ -1,6 +1,15 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { slugify } from '../../common/utils/slugify';
 import { EntityNotFoundError } from '../../domain/common/entity-not-found.error';
+import {
+  CATEGORY_REPOSITORY,
+  type ICategoryRepository,
+} from '../../domain/categories/category.repository.port';
+import {
+  PRODUCT_INDEXER,
+  type IProductIndexer,
+} from '../../domain/products/product-index.port';
 import {
   PRODUCT_REPOSITORY,
   type IProductRepository,
@@ -18,6 +27,11 @@ import type {
   ProductQuery,
   QuickViewProduct,
 } from '../../domain/products/product.model';
+import type {
+  CreateProductCommand,
+  CreateProductInput,
+  UpdateProductInput,
+} from '../../domain/products/product-write.model';
 
 @Injectable()
 export class ProductsService {
@@ -32,6 +46,10 @@ export class ProductsService {
     private readonly productRepo: IProductRepository,
     @Inject(PRODUCT_SEARCH_REPOSITORY)
     private readonly productSearch: IProductSearchRepository,
+    @Inject(CATEGORY_REPOSITORY)
+    private readonly categoryRepo: ICategoryRepository,
+    @Inject(PRODUCT_INDEXER)
+    private readonly productIndexer: IProductIndexer,
     configService: ConfigService,
   ) {
     this.defaultPageSize = configService.get<number>('defaultPageSize') ?? 24;
@@ -74,6 +92,73 @@ export class ProductsService {
 
   async getRelatedProducts(productId: number): Promise<ProductListItem[]> {
     return this.productRepo.findRelated(productId, this.relatedProductsLimit);
+  }
+
+  async createProduct(command: CreateProductCommand): Promise<Product> {
+    await this.assertCategoryExists(command.categoryId);
+
+    if (await this.productRepo.existsBySku(command.sku)) {
+      throw new ConflictException(`Product with SKU "${command.sku}" already exists`);
+    }
+
+    const slug = await this.resolveUniqueSlug(command.slug?.trim() || command.name);
+    const input: CreateProductInput = { ...command, slug };
+    const product = await this.productRepo.create(input);
+    await this.productIndexer.indexProduct(product.id);
+    return product;
+  }
+
+  async updateProduct(id: number, input: UpdateProductInput): Promise<Product> {
+    const existing = await this.productRepo.findById(id);
+    if (!existing) throw new EntityNotFoundError('Product', id);
+    if (Object.keys(input).length === 0) {
+      return existing;
+    }
+
+    if (input.categoryId !== undefined) {
+      await this.assertCategoryExists(input.categoryId);
+    }
+
+    if (input.sku !== undefined && (await this.productRepo.existsBySku(input.sku, id))) {
+      throw new ConflictException(`Product with SKU "${input.sku}" already exists`);
+    }
+
+    if (input.slug !== undefined) {
+      const slug = slugify(input.slug);
+      if (!slug) {
+        throw new ConflictException('Slug cannot be empty');
+      }
+      input.slug = slug;
+      if (await this.productRepo.existsBySlug(slug, id)) {
+        throw new ConflictException(`Product with slug "${slug}" already exists`);
+      }
+    }
+
+    const product = await this.productRepo.update(id, input);
+    if (!product) throw new EntityNotFoundError('Product', id);
+
+    await this.productIndexer.indexProduct(id);
+    return product;
+  }
+
+  private async assertCategoryExists(categoryId: number): Promise<void> {
+    const category = await this.categoryRepo.findById(categoryId);
+    if (!category) throw new EntityNotFoundError('Category', categoryId);
+  }
+
+  private async resolveUniqueSlug(base: string, excludeId?: number): Promise<string> {
+    const root = slugify(base);
+    if (!root) {
+      throw new ConflictException('Cannot generate slug from empty name');
+    }
+
+    let candidate = root;
+    let suffix = 2;
+    while (await this.productRepo.existsBySlug(candidate, excludeId)) {
+      candidate = `${root}-${suffix}`;
+      suffix++;
+    }
+    return candidate;
   }
 
   private normalizeLimit(limit?: number): number {

@@ -8,18 +8,17 @@ import {
   ATTRIBUTE_TEMPLATES,
   BRANDS_BY_CATEGORY,
   CATEGORIES,
-  PRODUCT_NAMES,
+  pick,
+  randomProductCountPerCategory,
+  resolveProductName,
 } from './seed-data';
+import { resolveProductImageUrl } from './seed-product-images';
 
 function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-}
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
 @Injectable()
@@ -41,10 +40,6 @@ export class BulkLoadService {
     });
   }
 
-  /**
-   * TypeORM `clear()` uses TRUNCATE without CASCADE, which fails on Postgres when
-   * tables have FKs (products → categories, categories.parent_id → categories).
-   */
   private async clearCatalogTables(manager: EntityManager): Promise<void> {
     await manager.query(
       'TRUNCATE TABLE product_attributes, products, categories RESTART IDENTITY CASCADE',
@@ -71,16 +66,18 @@ export class BulkLoadService {
     let productIndex = 0;
 
     for (const cat of CATEGORIES) {
-      const names = PRODUCT_NAMES[cat.slug] ?? [];
+      const count = randomProductCountPerCategory();
       const brands = BRANDS_BY_CATEGORY[cat.slug] ?? ['Generic'];
       const attrs = ATTRIBUTE_TEMPLATES[cat.slug] ?? [];
 
-      for (let i = 0; i < 10; i++) {
+      this.logger.log(`Category "${cat.slug}": generating ${count} products`);
+
+      for (let i = 0; i < count; i++) {
         productIndex++;
-        const baseName = names[i] ?? `${cat.name} Product ${i + 1}`;
+        const baseName = resolveProductName(cat.slug, i);
         const brand = brands[i % brands.length]!;
         const slug = `${slugify(baseName)}-${productIndex}`;
-        const sku = `SKU-${cat.slug.toUpperCase().slice(0, 3)}-${String(productIndex).padStart(4, '0')}`;
+        const sku = `SKU-${cat.slug.toUpperCase().slice(0, 3)}-${String(productIndex).padStart(5, '0')}`;
         const price = Math.round((15 + Math.random() * 485) * 100) / 100;
         const hasDiscount = Math.random() > 0.6;
         const compareAtPrice = hasDiscount
@@ -107,7 +104,7 @@ export class BulkLoadService {
           inStock,
           stockQuantity,
           popularityScore,
-          imageUrl: `https://picsum.photos/seed/${slug}/400/400`,
+          imageUrl: resolveProductImageUrl(baseName, cat.slug, slug),
         });
 
         for (const attrDef of attrs) {

@@ -1,12 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EntityNotFoundError } from '../../domain/common/entity-not-found.error';
+import type { IProductIndexer } from '../../domain/products/product-index.port';
 import { ProductEntity } from '../../database/entities/product.entity';
 import { OpenSearchClientProvider } from './opensearch.client';
 import type { ProductIndexDocument } from './product-index.document';
 
 @Injectable()
-export class ProductIndexerService {
+export class ProductIndexerService implements IProductIndexer {
   private readonly logger = new Logger(ProductIndexerService.name);
 
   constructor(
@@ -47,6 +49,22 @@ export class ProductIndexerService {
     }
 
     return indexed;
+  }
+
+  async indexProduct(productId: number): Promise<void> {
+    const product = await this.productRepo.findOne({
+      where: { id: productId },
+      relations: ['category', 'attributes'],
+    });
+    if (!product) throw new EntityNotFoundError('Product', productId);
+
+    await this.os.client.index({
+      index: this.os.index,
+      id: String(productId),
+      body: this.toIndexDocument(product),
+      refresh: true,
+    });
+    this.logger.debug(`Indexed product ${productId}`);
   }
 
   toIndexDocument(entity: ProductEntity): ProductIndexDocument {
