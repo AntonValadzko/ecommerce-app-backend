@@ -1,9 +1,8 @@
 import { utilities as nestWinstonUtilities, WinstonModuleOptions } from 'nest-winston';
 import * as winston from 'winston';
 
-const isProduction = process.env.NODE_ENV === 'production';
-
 export function buildWinstonModuleOptions(): WinstonModuleOptions {
+  const isProduction = process.env.NODE_ENV === 'production';
   const level = process.env.LOG_LEVEL ?? (isProduction ? 'info' : 'debug');
 
   return {

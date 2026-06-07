@@ -67,7 +67,7 @@ npm run db:migrate       # Migrations only (after build)
 npm run lint
 ```
 
-No test framework is configured.
+Unit tests: Jest + `@nestjs/testing` (`npm test`, `npm run test:cov`).
 
 ## Environment Variables
 

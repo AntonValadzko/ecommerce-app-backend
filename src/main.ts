@@ -24,23 +24,29 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useLogger(logger);
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('E-Commerce Catalog API')
-    .setDescription('Product catalog with search, faceted filtering, and saved searches')
-    .setVersion('1.0')
-    .addApiKey({ type: 'apiKey', in: 'header', name: 'x-session-id' }, 'session')
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
-
   app.enableShutdownHooks();
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') ?? 3000;
+  const swaggerEnabled = configService.get<boolean>('swaggerEnabled') ?? false;
+
+  if (swaggerEnabled) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('E-Commerce Catalog API')
+      .setDescription('Product catalog with search, faceted filtering, and saved searches')
+      .setVersion('1.0')
+      .addApiKey({ type: 'apiKey', in: 'header', name: 'x-session-id' }, 'session')
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
+
   await app.listen(port);
 
   logger.log(`Server running on http://localhost:${port}/api/v1`);
-  logger.log(`Swagger UI at http://localhost:${port}/api/docs`);
+  if (swaggerEnabled) {
+    logger.log(`Swagger UI at http://localhost:${port}/api/docs`);
+  }
 }
 
 bootstrap().catch((err: unknown) => {

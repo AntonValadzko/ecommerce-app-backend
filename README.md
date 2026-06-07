@@ -35,7 +35,7 @@ Node.js + TypeScript backend for an e-commerce product catalog built with NestJS
 - **Cache & resilience:** Redis 7 (response cache, rate limiting, sessions, async index queue)
 - **ORM:** TypeORM 0.3 — entities, migrations (`migrationsRun: true`, `synchronize: false`)
 - **Validation:** `class-validator` + `class-transformer` DTOs
-- **Docs:** Swagger UI at `/api/docs` via `@nestjs/swagger`
+- **Docs:** Swagger UI at `/api/docs` (development by default; disabled in production unless `SWAGGER_ENABLED=true`)
 - **Security:** `helmet`, `cors`
 
 ## Project Structure
@@ -277,7 +277,7 @@ npm run dev
 ```
 
 - API base: http://localhost:3000/api/v1
-- Swagger UI: http://localhost:3000/api/docs
+- Swagger UI: http://localhost:3000/api/docs (not mounted when `NODE_ENV=production` unless `SWAGGER_ENABLED=true`)
 
 ### Reindex search only
 
@@ -294,6 +294,8 @@ npm run search:reindex
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm run start` | Run production build (`node dist/main`) |
 | `npm run lint` | Type-check only (`tsc --noEmit`) |
+| `npm test` | Run unit tests (Jest) |
+| `npm run test:cov` | Unit tests with coverage report |
 | `npm run db:migrate` | Run pending migrations (requires `npm run build` first) |
 | `npm run db:seed` | Bulk-load demo catalog to Postgres + index OpenSearch |
 | `npm run search:reindex` | Rebuild OpenSearch index from Postgres |
@@ -315,8 +317,9 @@ npm run search:reindex
 | `REDIS_ENABLED` | `true` | Set `false` to disable Redis (direct DB/OS, no rate limit) |
 | `REDIS_RATE_LIMIT_MAX` | `200` | Max requests per IP per window |
 | `REDIS_RATE_LIMIT_WINDOW_SEC` | `60` | Rate limit window (seconds) |
+| `SWAGGER_ENABLED` | (unset) | Set `true` to expose Swagger UI when `NODE_ENV=production`; enabled automatically in non-production |
 
-Copy `.env.example` to `.env`. Config is injected via `ConfigService` (`@nestjs/config`).
+Copy `.env.example` to `.env`. Config is injected via `ConfigService` (`@nestjs/config`). Swagger is off in production unless you opt in with `SWAGGER_ENABLED=true`. The `/api/v1/health` endpoint returns generic `"unavailable"` errors in production instead of raw dependency messages.
 
 ## API Reference
 
