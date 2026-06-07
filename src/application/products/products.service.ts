@@ -7,10 +7,6 @@ import {
   type ICategoryRepository,
 } from '../../domain/categories/category.repository.port';
 import {
-  PRODUCT_INDEXER,
-  type IProductIndexer,
-} from '../../domain/products/product-index.port';
-import {
   PRODUCT_REPOSITORY,
   type IProductRepository,
 } from '../../domain/products/product.repository.port';
@@ -48,8 +44,6 @@ export class ProductsService {
     private readonly productSearch: IProductSearchRepository,
     @Inject(CATEGORY_REPOSITORY)
     private readonly categoryRepo: ICategoryRepository,
-    @Inject(PRODUCT_INDEXER)
-    private readonly productIndexer: IProductIndexer,
     configService: ConfigService,
   ) {
     this.defaultPageSize = configService.get<number>('defaultPageSize') ?? 24;
@@ -103,9 +97,7 @@ export class ProductsService {
 
     const slug = await this.resolveUniqueSlug(command.slug?.trim() || command.name);
     const input: CreateProductInput = { ...command, slug };
-    const product = await this.productRepo.create(input);
-    await this.productIndexer.indexProduct(product.id);
-    return product;
+    return this.productRepo.create(input);
   }
 
   async updateProduct(id: number, input: UpdateProductInput): Promise<Product> {
@@ -136,8 +128,6 @@ export class ProductsService {
 
     const product = await this.productRepo.update(id, input);
     if (!product) throw new EntityNotFoundError('Product', id);
-
-    await this.productIndexer.indexProduct(id);
     return product;
   }
 

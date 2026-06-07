@@ -12,7 +12,12 @@
     "search:reindex": "node dist/database/cli/search-reindex.js",
     "lint": "tsc --noEmit"
   },
-  "keywords": ["ecommerce", "catalog", "api", "typescript"],
+  "keywords": [
+    "ecommerce",
+    "catalog",
+    "api",
+    "typescript"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=20.0.0"
@@ -29,12 +34,15 @@
     "class-validator": "^0.14.1",
     "cors": "^2.8.5",
     "helmet": "^8.0.0",
+    "ioredis": "^5.11.0",
+    "nest-winston": "^1.10.2",
     "pg": "^8.13.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.21",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.0",

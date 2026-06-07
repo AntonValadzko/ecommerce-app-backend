@@ -21,8 +21,9 @@ src/
   domain/                    Models + ports (IProductRepository, IProductSearchRepository, …)
   application/               Use cases (inject ports via symbols)
   infrastructure/
-    persistence/             Postgres TypeORM repositories
-    search/                  OpenSearch adapter, indexer, index bootstrap
+    persistence/             Postgres TypeORM repositories (inner)
+    search/                  OpenSearch adapter, indexer, index queue
+    redis/                   Redis client, cache; Cached*Repository decorators
   presentation/http/         Controllers, DTOs, presenters, middleware
   database/                  Entities, migrations, bulk-load CLI, mappers
   config/configuration.ts    DATABASE_*, OPENSEARCH_*, Redis URL
@@ -38,7 +39,7 @@ Infrastructure is defined in `docker-compose.yml`. The NestJS app runs on the ho
 | postgres | 5432 | No (debug/SQL only) | user/db/password: `catalog` |
 | **pgbouncer** | **6432** | **Yes** (`DATABASE_PORT`) | Transaction pooling |
 | opensearch | 9200 | Yes (`OPENSEARCH_NODE`) | Security plugin disabled locally |
-| redis | 6379 | Not yet | `REDIS_URL` reserved |
+| redis | 6379 | Yes | Cache, rate limit, sessions, index queue |
 
 ```bash
 docker compose up -d          # start
@@ -78,7 +79,8 @@ No test framework is configured.
 | `DATABASE_USER` / `PASSWORD` / `NAME` | `catalog` | Postgres credentials |
 | `OPENSEARCH_NODE` | `http://localhost:9200` | OpenSearch URL |
 | `OPENSEARCH_INDEX` | `products` | Search index |
-| `REDIS_URL` | `redis://localhost:6379` | Reserved for caching |
+| `REDIS_URL` | `redis://localhost:6379` | Cache decorators, rate limit, sessions |
+| `REDIS_ENABLED` | `true` | Set `false` to disable Redis features |
 
 ## API
 

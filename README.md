@@ -32,7 +32,7 @@ Node.js + TypeScript backend for an e-commerce product catalog built with NestJS
 - **Architecture:** Layered / ports & adapters (domain → application → infrastructure → presentation)
 - **Database:** PostgreSQL 16 (via **PgBouncer** connection pooling on port `6432`)
 - **Search:** OpenSearch 2.x (faceted list, autocomplete, relevance sort)
-- **Cache (ready):** Redis 7 in Docker Compose
+- **Cache & resilience:** Redis 7 (response cache, rate limiting, sessions, async index queue)
 - **ORM:** TypeORM 0.3 — entities, migrations (`migrationsRun: true`, `synchronize: false`)
 - **Validation:** `class-validator` + `class-transformer` DTOs
 - **Docs:** Swagger UI at `/api/docs` via `@nestjs/swagger`
@@ -153,7 +153,7 @@ The API runs on your machine (Node.js). **Postgres, PgBouncer, OpenSearch, and R
 | **postgres** | `postgres:16-alpine` | `5432` | Admin/debug only | Primary database |
 | **pgbouncer** | `edoburu/pgbouncer` | **`6432`** | **NestJS app** | Connection pooling (`transaction` mode) |
 | **opensearch** | `opensearchproject/opensearch:2.11.1` | `9200` | Search adapter | Product list, facets, autocomplete |
-| **redis** | `redis:7-alpine` | `6379` | Future use | Reserved for caching |
+| **redis** | `redis:7-alpine` | `6379` | Yes | Cache, rate limits, index queue, sessions |
 
 **Credentials (local only):**
 
@@ -311,7 +311,10 @@ npm run search:reindex
 | `DATABASE_NAME` | `catalog` | Database name |
 | `OPENSEARCH_NODE` | `http://localhost:9200` | OpenSearch URL |
 | `OPENSEARCH_INDEX` | `products` | Product search index name |
-| `REDIS_URL` | `redis://localhost:6379` | Redis (reserved for future caching) |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection |
+| `REDIS_ENABLED` | `true` | Set `false` to disable Redis (direct DB/OS, no rate limit) |
+| `REDIS_RATE_LIMIT_MAX` | `200` | Max requests per IP per window |
+| `REDIS_RATE_LIMIT_WINDOW_SEC` | `60` | Rate limit window (seconds) |
 
 Copy `.env.example` to `.env`. Config is injected via `ConfigService` (`@nestjs/config`).
 
@@ -352,6 +355,7 @@ Copy `.env.example` to `.env`. Config is injected via `ConfigService` (`@nestjs/
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/v1/health` | Postgres, Redis, and OpenSearch status |
 | GET | `/api/v1/categories` | Flat list with product counts |
 | GET | `/api/v1/categories/tree` | Nested tree for navigation |
 | GET | `/api/v1/categories/:slug` | Category by slug |
