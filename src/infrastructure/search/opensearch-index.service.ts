@@ -8,11 +8,14 @@ export class OpenSearchIndexService implements OnModuleInit {
   constructor(private readonly os: OpenSearchClientProvider) {}
 
   async onModuleInit(): Promise<void> {
+    if (!this.os.enabled || !this.os.client) return;
     await this.ensureIndex();
   }
 
   async ensureIndex(): Promise<void> {
-    const { index, client } = this.os;
+    if (!this.os.enabled || !this.os.client) return;
+    const { index } = this.os;
+    const client = this.os.requireClient();
     const exists = await client.indices.exists({ index });
     if (exists.statusCode === 200) return;
 
@@ -68,7 +71,9 @@ export class OpenSearchIndexService implements OnModuleInit {
   }
 
   async deleteIndex(): Promise<void> {
-    const { index, client } = this.os;
+    if (!this.os.enabled || !this.os.client) return;
+    const { index } = this.os;
+    const client = this.os.requireClient();
     const exists = await client.indices.exists({ index });
     if (exists.statusCode === 200) {
       await client.indices.delete({ index });

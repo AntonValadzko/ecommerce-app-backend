@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { WinstonModule } from 'nest-winston';
 import { CliModule } from './cli.module';
+import { ConfigService } from '@nestjs/config';
 import { BulkLoadService } from '../bulk-load.service';
 import { ProductIndexerService } from '../../infrastructure/search/product-indexer.service';
 import { OpenSearchIndexService } from '../../infrastructure/search/opensearch-index.service';
@@ -27,14 +28,22 @@ async function main() {
     const result = await bulkLoad.loadDemoCatalog(clear);
     logger.log(`Postgres: ${result.categories} categories, ${result.products} products`);
 
-    if (!skipSearch) {
+    const config = app.get(ConfigService);
+    const opensearchEnabled = config.get<boolean>('opensearch.enabled');
+    const redisEnabled = config.get<boolean>('redis.enabled');
+
+    if (!skipSearch && opensearchEnabled) {
       await app.get(OpenSearchIndexService).ensureIndex();
       const indexed = await app.get(ProductIndexerService).reindexAll();
       logger.log(`OpenSearch: indexed ${indexed} documents`);
+    } else if (!skipSearch) {
+      logger.log('OpenSearch: skipped (OPENSEARCH_ENABLED=false)');
     }
 
-    await app.get(CacheInvalidationService).onCatalogMutation();
-    logger.log('Redis: catalog cache version bumped');
+    if (redisEnabled) {
+      await app.get(CacheInvalidationService).onCatalogMutation();
+      logger.log('Redis: catalog cache version bumped');
+    }
   } finally {
     await app.get(DataSource).destroy();
     await app.close();

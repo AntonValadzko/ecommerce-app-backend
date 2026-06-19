@@ -21,6 +21,7 @@ describe('configuration', () => {
         expect(config.swaggerEnabled).toBe(true);
         expect(config.database.password).toBe('catalog');
         expect(config.redis.enabled).toBe(true);
+        expect(config.opensearch.enabled).toBe(true);
         expect(config.defaultPageSize).toBe(24);
       },
     );
@@ -44,6 +45,18 @@ describe('configuration', () => {
   it('disables redis when REDIS_ENABLED=false', () => {
     withEnv({ REDIS_ENABLED: 'false' }, () => {
       expect(configuration().redis.enabled).toBe(false);
+    });
+  });
+
+  it('enables database ssl when DATABASE_SSL=true', () => {
+    withEnv({ DATABASE_SSL: 'true' }, () => {
+      expect(configuration().database.ssl).toBe(true);
+    });
+  });
+
+  it('disables opensearch when OPENSEARCH_ENABLED=false', () => {
+    withEnv({ OPENSEARCH_ENABLED: 'false' }, () => {
+      expect(configuration().opensearch.enabled).toBe(false);
     });
   });
 

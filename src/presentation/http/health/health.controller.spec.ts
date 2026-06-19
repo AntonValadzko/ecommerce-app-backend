@@ -12,6 +12,7 @@ describe('HealthController', () => {
     ping: jest.fn(),
   };
   const opensearch = {
+    enabled: true,
     client: {
       cluster: {
         health: jest.fn(),
@@ -52,7 +53,7 @@ describe('HealthController', () => {
       checks: {
         postgres: expect.objectContaining({ ok: true, latencyMs: expect.any(Number) }),
         redis: { ok: true, enabled: true },
-        opensearch: { ok: true },
+        opensearch: { ok: true, enabled: true },
       },
     });
   });
@@ -67,6 +68,20 @@ describe('HealthController', () => {
 
     expect(result.status).toBe('degraded');
     expect(result.checks.postgres.error).toBe('password authentication failed');
+  });
+
+  it('skips opensearch check when disabled', async () => {
+    opensearch.enabled = false;
+    opensearch.client = null as never;
+    const controller = await createController('development');
+    dataSource.query.mockResolvedValue([{ '?column?': 1 }]);
+    redis.config.enabled = false;
+
+    const result = await controller.check();
+
+    expect(result.checks.opensearch).toEqual({ ok: true, enabled: false });
+    opensearch.enabled = true;
+    opensearch.client = { cluster: { health: jest.fn() } } as never;
   });
 
   it('masks dependency errors in production', async () => {

@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { WinstonModule } from 'nest-winston';
+import { ConfigService } from '@nestjs/config';
 import { CliModule } from './cli.module';
 import { ProductIndexerService } from '../../infrastructure/search/product-indexer.service';
 import { OpenSearchIndexService } from '../../infrastructure/search/opensearch-index.service';
@@ -21,6 +22,12 @@ async function main() {
   const logger = app.get(WINSTON_MODULE_NEST_PROVIDER);
 
   try {
+    const config = app.get(ConfigService);
+    if (!config.get<boolean>('opensearch.enabled')) {
+      logger.warn('OpenSearch is disabled (OPENSEARCH_ENABLED=false); nothing to reindex');
+      return;
+    }
+
     const indexService = app.get(OpenSearchIndexService);
     if (recreate) {
       await indexService.deleteIndex();
@@ -29,8 +36,10 @@ async function main() {
 
     const indexed = await app.get(ProductIndexerService).reindexAll();
     logger.log(`Reindexed ${indexed} products into OpenSearch`);
-    await app.get(CacheInvalidationService).onCatalogMutation();
-    logger.log('Redis: catalog cache version bumped');
+    if (config.get<boolean>('redis.enabled')) {
+      await app.get(CacheInvalidationService).onCatalogMutation();
+      logger.log('Redis: catalog cache version bumped');
+    }
   } finally {
     await app.get(DataSource).destroy();
     await app.close();

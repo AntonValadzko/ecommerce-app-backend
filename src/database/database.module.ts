@@ -16,6 +16,7 @@ import { DATABASE_ENTITIES, DATABASE_MIGRATIONS } from './database.constants';
           username: string;
           password: string;
           database: string;
+          ssl: boolean;
         }>('database')!;
 
         return {
@@ -25,6 +26,7 @@ import { DATABASE_ENTITIES, DATABASE_MIGRATIONS } from './database.constants';
           username: db.username,
           password: db.password,
           database: db.database,
+          ssl: db.ssl ? { rejectUnauthorized: false } : false,
           entities: DATABASE_ENTITIES,
           migrations: DATABASE_MIGRATIONS,
           migrationsRun: true,

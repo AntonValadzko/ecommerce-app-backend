@@ -47,7 +47,7 @@ export class OpenSearchProductSearchRepository implements IProductSearchReposito
     };
     if (searchAfter) body.search_after = searchAfter;
 
-    const response = await this.os.client.search({ index: this.os.index, body });
+    const response = await this.os.requireClient().search({ index: this.os.index, body });
     const hits = response.body.hits.hits as Array<{
       _source: ProductIndexDocument;
       sort?: unknown[];
@@ -86,7 +86,7 @@ export class OpenSearchProductSearchRepository implements IProductSearchReposito
     sortKey: SortOption,
     hasSearch: boolean,
   ): Promise<PaginatedResult<ProductListItem>> {
-    const response = await this.os.client.search({
+    const response = await this.os.requireClient().search({
       index: this.os.index,
       body: {
         query: buildBoolQuery(query),
@@ -132,7 +132,7 @@ export class OpenSearchProductSearchRepository implements IProductSearchReposito
       attributes: undefined,
     };
 
-    const response = await this.os.client.search({
+    const response = await this.os.requireClient().search({
       index: this.os.index,
       body: {
         size: 0,
@@ -223,7 +223,7 @@ export class OpenSearchProductSearchRepository implements IProductSearchReposito
     const trimmed = term.trim();
     if (!trimmed) return [];
 
-    const response = await this.os.client.search({
+    const response = await this.os.requireClient().search({
       index: this.os.index,
       body: {
         size: limit,
@@ -257,7 +257,7 @@ export class OpenSearchProductSearchRepository implements IProductSearchReposito
     }
 
     if (suggestions.length < limit) {
-      const brandAgg = await this.os.client.search({
+      const brandAgg = await this.os.requireClient().search({
         index: this.os.index,
         body: {
           size: 0,

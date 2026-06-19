@@ -37,7 +37,7 @@ export class ProductIndexerService implements IProductIndexer {
         return [{ index: { _index: this.os.index, _id: String(p.id) } }, doc];
       });
 
-      const result = await this.os.client.bulk({ refresh: true, body });
+      const result = await this.os.requireClient().bulk({ refresh: true, body });
       if (result.body.errors) {
         this.logger.error('Bulk index errors', JSON.stringify(result.body.items?.slice(0, 3)));
         throw new Error('OpenSearch bulk indexing failed');
@@ -58,7 +58,7 @@ export class ProductIndexerService implements IProductIndexer {
     });
     if (!product) throw new EntityNotFoundError('Product', productId);
 
-    await this.os.client.index({
+    await this.os.requireClient().index({
       index: this.os.index,
       id: String(productId),
       body: this.toIndexDocument(product),

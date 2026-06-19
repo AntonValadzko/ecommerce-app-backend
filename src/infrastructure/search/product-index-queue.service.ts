@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type Redis from 'ioredis';
+import { PRODUCT_INDEXER, type IProductIndexer } from '../../domain/products/product-index.port';
 import { RedisClientProvider } from '../redis/redis.client';
-import { ProductIndexerService } from './product-indexer.service';
 
 @Injectable()
 export class ProductIndexQueueService implements OnModuleInit, OnModuleDestroy {
@@ -11,11 +12,12 @@ export class ProductIndexQueueService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly redisProvider: RedisClientProvider,
-    private readonly indexer: ProductIndexerService,
+    @Inject(PRODUCT_INDEXER) private readonly indexer: IProductIndexer,
+    private readonly config: ConfigService,
   ) {}
 
   onModuleInit(): void {
-    if (this.redisProvider.config.enabled) {
+    if (this.config.get<boolean>('opensearch.enabled') && this.redisProvider.config.enabled) {
       void this.startWorker();
     }
   }
@@ -44,6 +46,8 @@ export class ProductIndexQueueService implements OnModuleInit, OnModuleDestroy {
 
   /** Queue when Redis is up; otherwise index synchronously. */
   async enqueueOrIndex(productId: number): Promise<void> {
+    if (!this.config.get<boolean>('opensearch.enabled')) return;
+
     const queued = await this.enqueue(productId);
     if (!queued) {
       await this.indexer.indexProduct(productId);

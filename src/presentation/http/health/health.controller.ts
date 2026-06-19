@@ -53,16 +53,19 @@ export class HealthController {
     return ok ? { ok: true, enabled: true } : { ok: false, enabled: true, error: 'ping failed' };
   }
 
-  private async checkOpenSearch(): Promise<{ ok: boolean; error?: string }> {
+  private async checkOpenSearch(): Promise<{ ok: boolean; enabled: boolean; error?: string }> {
+    if (!this.opensearch.enabled || !this.opensearch.client) {
+      return { ok: true, enabled: false };
+    }
     try {
       const health = await this.opensearch.client.cluster.health();
       const status = health.body.status as string;
       const ok = status !== 'red';
       return ok
-        ? { ok: true }
-        : { ok: false, error: this.publicError(`cluster status: ${status}`) };
+        ? { ok: true, enabled: true }
+        : { ok: false, enabled: true, error: this.publicError(`cluster status: ${status}`) };
     } catch (err) {
-      return { ok: false, error: this.publicError((err as Error).message) };
+      return { ok: false, enabled: true, error: this.publicError((err as Error).message) };
     }
   }
 

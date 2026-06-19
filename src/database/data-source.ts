@@ -9,6 +9,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DATABASE_USER ?? 'catalog',
   password: process.env.DATABASE_PASSWORD ?? 'catalog',
   database: process.env.DATABASE_NAME ?? 'catalog',
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
   entities: DATABASE_ENTITIES,
   migrations: DATABASE_MIGRATIONS,
   synchronize: false,

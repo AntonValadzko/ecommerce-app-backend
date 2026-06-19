@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { IProductSearchRepository } from '../../../domain/products/product-search.repository.port';
+import {
+  PRODUCT_SEARCH_BACKEND,
+  type IProductSearchRepository,
+} from '../../../domain/products/product-search.repository.port';
 import type {
   AutocompleteSuggestion,
   FilterFacets,
@@ -8,7 +11,6 @@ import type {
   ProductListItem,
   ProductQuery,
 } from '../../../domain/products/product.model';
-import { OpenSearchProductSearchRepository } from '../../search/opensearch-product-search.repository';
 import { productQueryCacheKey } from '../cache-key.util';
 import { RedisCacheService } from '../redis-cache.service';
 import type { RedisConfig } from '../redis.types';
@@ -18,7 +20,8 @@ export class CachedProductSearchRepository implements IProductSearchRepository {
   private readonly ttl: RedisConfig['cacheTtl'];
 
   constructor(
-    private readonly inner: OpenSearchProductSearchRepository,
+    @Inject(PRODUCT_SEARCH_BACKEND)
+    private readonly inner: IProductSearchRepository,
     private readonly cache: RedisCacheService,
     configService: ConfigService,
   ) {

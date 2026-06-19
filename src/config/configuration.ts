@@ -14,8 +14,11 @@ export default () => {
       username: process.env.DATABASE_USER ?? 'catalog',
       password: process.env.DATABASE_PASSWORD ?? 'catalog',
       database: process.env.DATABASE_NAME ?? 'catalog',
+      /** Remote/managed Postgres often requires TLS; pgAdmin enables this by default. */
+      ssl: process.env.DATABASE_SSL === 'true',
     },
     opensearch: {
+      enabled: process.env.OPENSEARCH_ENABLED !== 'false',
       node: process.env.OPENSEARCH_NODE ?? 'http://localhost:9200',
       index: process.env.OPENSEARCH_INDEX ?? 'products',
     },
